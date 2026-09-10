@@ -1,0 +1,53 @@
+{
+  "tracking": {
+    "search_id": "REDACTED"
+  },
+  "result": {
+    "distance": {
+      "walking_meters": 0,
+      "linear_meters": 0
+    },
+    "availability": {
+      "available": true,
+      "available_spaces": 1
+    },
+    "rates": [
+      {
+        "quote": {
+          "meta": {
+            "quote_mac": "REDACTED",
+            "quote_token": "REDACTED-QUOTE-TOKEN"
+          },
+          "total_price": {
+            "currency_code": "USD",
+            "value": 2968
+          },
+          "advertised_price": {
+            "currency_code": "USD",
+            "value": 2800
+          }
+        }
+      }
+    ],
+    "facility": {
+      "common": {
+        "id": "6698",
+        "title": "Example Facility 6698",
+        "slug": "example-facility-6698",
+        "status": "on_sales_allowed",
+        "addresses": [
+          {
+            "street_address": "500 Howard Street",
+            "city": "San Francisco",
+            "state": "CA",
+            "postal_code": "94105",
+            "types": ["search"]
+          }
+        ]
+      }
+    },
+    "options": {
+      "commuter_card_eligible": false
+    }
+  }
+}

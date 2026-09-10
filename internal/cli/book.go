@@ -20,10 +20,11 @@ func newBookCmd(opt *Options) *cobra.Command {
 
 func newBookPreviewCmd(opt *Options) *cobra.Command {
 	var facilityID int
-	var starts, ends, rateID, email string
+	var starts, ends, rateID, email, citySlug string
 	cmd := &cobra.Command{
 		Use:   "preview",
 		Short: "Preview a booking quote without charging",
+		Long:  "Fetches quote via GET api.spothero.com/v2/search/transient/{facilityId} (no charge). Naive --starts/--ends use --city-slug for local timezone (same as search); pass RFC3339 with Z/offset to override.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if facilityID == 0 || starts == "" || ends == "" {
 				return exitcode.Usagef("--facility-id --starts --ends are required")
@@ -32,16 +33,24 @@ func newBookPreviewCmd(opt *Options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rates, err := c.GetFacilityRates(facilityID, starts, ends)
+			quote, err := c.GetFacilityRates(client.FacilityRateQuery{
+				FacilityID: facilityID,
+				Starts:     starts,
+				Ends:       ends,
+				CitySlug:   citySlug,
+			})
 			if err != nil {
 				return err
 			}
 			preview := client.BookPreview{
-				FacilityID: facilityID,
-				Starts:     starts,
-				Ends:       ends,
-				DryRun:     true,
-				Message:    "Preview only — no charge. Use book place with all safety gates to commit.",
+				FacilityID:   facilityID,
+				Title:        quote.Title,
+				Starts:       starts,
+				Ends:         ends,
+				PeriodsUTC:   quote.PeriodsUTC,
+				TimezoneNote: quote.TimezoneNote,
+				DryRun:       true,
+				Message:      "Preview only — no charge. Use book place with all safety gates to commit.",
 			}
 			if email == "" {
 				if user, uerr := c.GetUser(); uerr == nil {
@@ -50,10 +59,10 @@ func newBookPreviewCmd(opt *Options) *cobra.Command {
 			} else {
 				preview.Email = email
 			}
-			if len(rates) > 0 {
-				chosen := rates[0]
+			if len(quote.Rates) > 0 {
+				chosen := quote.Rates[0]
 				if rateID != "" {
-					for _, r := range rates {
+					for _, r := range quote.Rates {
 						if r.RateID == rateID {
 							chosen = r
 							break
@@ -70,14 +79,15 @@ func newBookPreviewCmd(opt *Options) *cobra.Command {
 	cmd.Flags().IntVar(&facilityID, "facility-id", 0, "Facility ID from search results")
 	cmd.Flags().StringVar(&starts, "starts", "", "Parking start datetime")
 	cmd.Flags().StringVar(&ends, "ends", "", "Parking end datetime")
-	cmd.Flags().StringVar(&rateID, "rate-id", "", "Optional specific rate ID")
+	cmd.Flags().StringVar(&citySlug, "city-slug", "", "Search city slug for naive datetime TZ (from search params.city_slug)")
+	cmd.Flags().StringVar(&rateID, "rate-id", "", "Optional specific rate/quote token")
 	cmd.Flags().StringVar(&email, "email", "", "Receipt email override")
 	return cmd
 }
 
 func newBookPlaceCmd(opt *Options) *cobra.Command {
 	var facilityID int
-	var starts, ends, rateID, email string
+	var starts, ends, rateID, email, citySlug string
 	var enableLive, ownerApproved bool
 	var confirm string
 	cmd := &cobra.Command{
@@ -98,14 +108,19 @@ func newBookPlaceCmd(opt *Options) *cobra.Command {
 				return exitcode.Authf("authenticated session required; run auth login")
 			}
 			if rateID == "" {
-				rates, err := c.GetFacilityRates(facilityID, starts, ends)
+				quote, err := c.GetFacilityRates(client.FacilityRateQuery{
+					FacilityID: facilityID,
+					Starts:     starts,
+					Ends:       ends,
+					CitySlug:   citySlug,
+				})
 				if err != nil {
 					return err
 				}
-				if len(rates) == 0 {
+				if len(quote.Rates) == 0 {
 					return exitcode.NotFoundf("no rates for facility %d", facilityID)
 				}
-				rateID = rates[0].RateID
+				rateID = quote.Rates[0].RateID
 			}
 			if email == "" {
 				user, err := c.GetUser()
@@ -142,7 +157,8 @@ func newBookPlaceCmd(opt *Options) *cobra.Command {
 	cmd.Flags().IntVar(&facilityID, "facility-id", 0, "Facility ID from search results")
 	cmd.Flags().StringVar(&starts, "starts", "", "Parking start datetime")
 	cmd.Flags().StringVar(&ends, "ends", "", "Parking end datetime")
-	cmd.Flags().StringVar(&rateID, "rate-id", "", "Rate ID from book preview")
+	cmd.Flags().StringVar(&citySlug, "city-slug", "", "Search city slug for naive datetime TZ")
+	cmd.Flags().StringVar(&rateID, "rate-id", "", "Rate/quote token from book preview")
 	cmd.Flags().StringVar(&email, "email", "", "Receipt email")
 	cmd.Flags().BoolVar(&enableLive, "enable-live-booking", false, "Explicit opt-in to charge a payment method")
 	cmd.Flags().BoolVar(&ownerApproved, "owner-approved", false, "Explicit owner approval for this booking")

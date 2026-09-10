@@ -9,7 +9,8 @@ const CraigAPIBaseURL = "https://api.spothero.com/v2"
 
 // Endpoint paths on the consumer session API.
 const (
-	PathSearchParams  = "/search-params/"
+	PathSearchParams = "/search-params/"
+	// PathFacilityRates is legacy ratesSearch on spothero.com (404/dead); book preview uses Craig instead.
 	PathFacilityRates = "/facilities/%d/rates/"
 	PathUser          = "/user/"
 	PathReservations  = "/reservations/"
@@ -23,4 +24,6 @@ const (
 const (
 	PathCraigTransientSearch     = "/search/transient"
 	PathCraigBulkTransientSearch = "/search/bulk/transient"
+	// PathCraigTransientFacility is GET quote/rates for one facility (book preview).
+	PathCraigTransientFacility = "/search/transient/%d"
 )

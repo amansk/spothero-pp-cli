@@ -29,6 +29,8 @@ func mockHTTP(t *testing.T) *client.Client {
 			_, _ = w.Write([]byte(`{"data":{"rental_id":132887395,"status":"success","is_cancellable":true}}`))
 		case "/reservations/r1/":
 			_, _ = w.Write([]byte(`{"data":{"rental_id":1,"display_id":"r1","status":"upcoming","is_cancellable":true}}`))
+		case "/search/transient/6698":
+			_, _ = w.Write([]byte(`{"result":{"availability":{"available":true},"rates":[{"quote":{"meta":{"quote_token":"tok-1"},"total_price":{"value":2968}}}],"facility":{"common":{"id":"6698","title":"Lot 6698","status":"on_sales_allowed"}}}}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -72,6 +74,34 @@ func TestSearchJSON(t *testing.T) {
 	var payload map[string]any
 	if err := json.Unmarshal([]byte(out), &payload); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestBookPreviewJSON(t *testing.T) {
+	code, out, errOut := runCLI(t, "--json", "book", "preview",
+		"--facility-id", "6698",
+		"--starts", "2026-09-15T09:00",
+		"--ends", "2026-09-15T17:00",
+		"--city-slug", "san-francisco",
+	)
+	if code != 0 {
+		t.Fatalf("code=%d err=%q out=%q", code, errOut, out)
+	}
+	var preview struct {
+		FacilityID int    `json:"facility_id"`
+		Title      string `json:"title"`
+		PriceCents int    `json:"price_cents"`
+		RateID     string `json:"rate_id"`
+		DryRun     bool   `json:"dry_run"`
+	}
+	if err := json.Unmarshal([]byte(out), &preview); err != nil {
+		t.Fatal(err)
+	}
+	if preview.FacilityID != 6698 || preview.PriceCents != 2968 || preview.RateID != "tok-1" || !preview.DryRun {
+		t.Fatalf("%+v", preview)
+	}
+	if preview.Title != "Lot 6698" {
+		t.Fatalf("title=%q", preview.Title)
 	}
 }
 

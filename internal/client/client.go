@@ -29,7 +29,7 @@ func New(session *auth.Session) *Client {
 		BaseURL: DefaultBaseURL,
 		HTTP:    &http.Client{Timeout: 30 * time.Second},
 		Session: session,
-		UserAgent: "spothero-pp-cli/0.1.2 (+https://github.com/amansk/spothero-pp-cli)",
+		UserAgent: "spothero-pp-cli/0.1.3 (+https://github.com/amansk/spothero-pp-cli)",
 	}
 }
 
@@ -325,28 +325,40 @@ func (c *Client) GetSearchParams(q SearchQuery) (SearchParams, error) {
 	return out, nil
 }
 
-func (c *Client) GetFacilityRates(facilityID int, starts, ends string) ([]RateQuote, error) {
-	path := fmt.Sprintf(PathFacilityRates, facilityID) + "?" + url.Values{
-		"starts": {starts},
-		"ends":   {ends},
-	}.Encode()
-	var raw map[string]any
-	if err := c.doJSON(http.MethodGet, path, nil, &raw); err != nil {
-		return nil, err
+// GetFacilityRates queries Craig GET /v2/search/transient/{facilityId} for quote/rates.
+func (c *Client) GetFacilityRates(q FacilityRateQuery) (FacilityRateResult, error) {
+	params := SearchParams{CitySlug: q.CitySlug}
+	periods, loc, err := periodsToUTC(q.Starts, q.Ends, params)
+	if err != nil {
+		return FacilityRateResult{}, exitcode.Usagef("%v", err)
 	}
-	// Normalize flexible API shapes into RateQuote slice.
-	b, _ := json.Marshal(raw)
-	var list []RateQuote
-	if err := json.Unmarshal(b, &list); err == nil {
-		return list, nil
+	startsUTC := periods[0].Starts
+	endsUTC := periods[0].Ends
+	raw, err := c.searchTransientFacilityGET(q.FacilityID, startsUTC, endsUTC)
+	if err != nil {
+		return FacilityRateResult{}, err
 	}
-	var wrapped struct {
-		Results []RateQuote `json:"results"`
+	rates, title, err := parseCraigFacilityRates(raw, q.FacilityID, q.Starts, q.Ends)
+	if err != nil {
+		return FacilityRateResult{}, exitcode.APIf("%v", err)
 	}
-	if err := json.Unmarshal(b, &wrapped); err == nil && len(wrapped.Results) > 0 {
-		return wrapped.Results, nil
+	note := timezoneNoteForSearch(q.Starts, loc)
+	return FacilityRateResult{
+		Rates:        rates,
+		PeriodsUTC:   periods,
+		TimezoneNote: note,
+		Title:        title,
+	}, nil
+}
+
+func timezoneNoteForSearch(starts string, loc *time.Location) string {
+	if hasExplicitOffset(starts) {
+		return ""
 	}
-	return nil, nil
+	if loc != nil && loc != time.UTC {
+		return fmt.Sprintf("Naive --starts/--ends interpreted in %s (from --city-slug or search). Pass RFC3339 with offset or Z to override.", loc.String())
+	}
+	return "Naive --starts/--ends interpreted as UTC (city timezone unknown). Pass --city-slug from search output or RFC3339 with offset for local wall times."
 }
 
 func (c *Client) GetUser() (UserProfile, error) {

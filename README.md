@@ -60,8 +60,11 @@ Preview never charges:
 
 ```bash
 spothero-pp-cli book preview --facility-id 12345 \
-  --starts 2026-09-11T09:30 --ends 2026-09-11T12:30 --json
+  --starts 2026-09-11T09:30 --ends 2026-09-11T12:30 \
+  --city-slug chicago --json
 ```
+
+Uses Craig `GET /v2/search/transient/{facilityId}` (no charge). Pass `--city-slug` from search output for naive local datetimes.
 
 Live booking requires **all three** gates (exact confirm string):
 

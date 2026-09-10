@@ -196,7 +196,11 @@ func parseCraigSearchResults(items []json.RawMessage) ([]SearchSpot, error) {
 }
 
 type rateQuoteWire struct {
+	ID    FlexID `json:"id"`
 	Quote struct {
+		Meta struct {
+			QuoteToken string `json:"quote_token"`
+		} `json:"meta"`
 		TotalPrice      moneyWire `json:"total_price"`
 		AdvertisedPrice moneyWire `json:"advertised_price"`
 	} `json:"quote"`
@@ -293,6 +297,72 @@ type craigAddress struct {
 	State         string   `json:"state"`
 	PostalCode    string   `json:"postal_code"`
 	Types         []string `json:"types"`
+}
+
+type craigFacilityResponse struct {
+	Result json.RawMessage `json:"result"`
+}
+
+// searchTransientFacilityGET is GET /v2/search/transient/{facilityId} (live book preview path).
+func (c *Client) searchTransientFacilityGET(facilityID int, startsUTC, endsUTC string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("starts", startsUTC)
+	q.Set("ends", endsUTC)
+	path := fmt.Sprintf(PathCraigTransientFacility, facilityID)
+	var resp craigFacilityResponse
+	if err := c.doCraigJSON(http.MethodGet, path, q, nil, &resp); err != nil {
+		return nil, err
+	}
+	if len(resp.Result) == 0 {
+		return nil, exitcode.NotFoundf("no quote for facility %d", facilityID)
+	}
+	return resp.Result, nil
+}
+
+func parseCraigFacilityRates(raw json.RawMessage, facilityID int, starts, ends string) ([]RateQuote, string, error) {
+	var wire struct {
+		Availability struct {
+			Available bool `json:"available"`
+		} `json:"availability"`
+		Rates    []rateQuoteWire `json:"rates"`
+		Facility struct {
+			Common struct {
+				Title  string `json:"title"`
+				Status string `json:"status"`
+			} `json:"common"`
+		} `json:"facility"`
+	}
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		return nil, "", fmt.Errorf("craig facility result: %w", err)
+	}
+	available := wire.Availability.Available
+	if !available && wire.Facility.Common.Status == "on_sales_allowed" && len(wire.Rates) > 0 {
+		available = true
+	}
+	if wire.Facility.Common.Status != "" && wire.Facility.Common.Status != "on_sales_allowed" {
+		available = false
+	}
+	out := make([]RateQuote, 0, len(wire.Rates))
+	for _, rate := range wire.Rates {
+		cents := int(rate.Quote.TotalPrice.Value)
+		if cents <= 0 {
+			cents = int(rate.Quote.AdvertisedPrice.Value)
+		}
+		rateID := rate.Quote.Meta.QuoteToken
+		if rateID == "" {
+			rateID = rate.ID.String()
+		}
+		out = append(out, RateQuote{
+			FacilityID: facilityID,
+			Starts:     starts,
+			Ends:       ends,
+			PriceCents: cents,
+			Price:      formatUSD(cents),
+			Available:  available,
+			RateID:     rateID,
+		})
+	}
+	return out, wire.Facility.Common.Title, nil
 }
 
 func formatFacilityAddress(addrs []craigAddress) string {

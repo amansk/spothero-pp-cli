@@ -67,6 +67,22 @@ type UserProfile struct {
 	LastName  string `json:"last_name"`
 }
 
+// FacilityRateQuery is input for Craig GET /search/transient/{facilityId}.
+type FacilityRateQuery struct {
+	FacilityID int
+	Starts     string
+	Ends       string
+	CitySlug   string // optional: naive --starts/--ends timezone (from search params)
+}
+
+// FacilityRateResult is Craig facility quote mapped for book preview.
+type FacilityRateResult struct {
+	Rates        []RateQuote    `json:"rates"`
+	PeriodsUTC   []SearchPeriod `json:"periods_utc"`
+	TimezoneNote string         `json:"timezone_note,omitempty"`
+	Title        string         `json:"title,omitempty"`
+}
+
 // RateQuote is a facility rate for a time window.
 type RateQuote struct {
 	FacilityID int    `json:"facility_id"`
@@ -100,15 +116,18 @@ type CheckoutPayment struct {
 
 // BookPreview is local preview output before a live booking.
 type BookPreview struct {
-	FacilityID  int    `json:"facility_id"`
-	Starts      string `json:"starts"`
-	Ends        string `json:"ends"`
-	PriceCents  int    `json:"price_cents"`
-	Price       string `json:"price"`
-	RateID      string `json:"rate_id,omitempty"`
-	Email       string `json:"email,omitempty"`
-	DryRun      bool   `json:"dry_run"`
-	Message     string `json:"message"`
+	FacilityID   int            `json:"facility_id"`
+	Title        string         `json:"title,omitempty"`
+	Starts       string         `json:"starts"`
+	Ends         string         `json:"ends"`
+	PeriodsUTC   []SearchPeriod `json:"periods_utc,omitempty"`
+	TimezoneNote string         `json:"timezone_note,omitempty"`
+	PriceCents   int            `json:"price_cents"`
+	Price        string         `json:"price"`
+	RateID       string         `json:"rate_id,omitempty"`
+	Email        string         `json:"email,omitempty"`
+	DryRun       bool           `json:"dry_run"`
+	Message      string         `json:"message"`
 }
 
 // CancelPreview is local preview before cancellation.
