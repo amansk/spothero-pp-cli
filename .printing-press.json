@@ -1,0 +1,44 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-09-10T00:00:00Z",
+  "api_name": "spothero",
+  "display_name": "SpotHero",
+  "cli_name": "spothero-pp-cli",
+  "category": "commerce",
+  "creator": {
+    "handle": "amansk",
+    "name": "Amandeep Khurana"
+  },
+  "owner": "amansk",
+  "printer": "amansk",
+  "printer_name": "Amandeep Khurana",
+  "run_id": "20260910-spothero-hand",
+  "api_version": "0.1.6",
+  "auth_type": "cookie",
+  "auth_env_vars": [
+    "SPOTHERO_COOKIES"
+  ],
+  "auth_description": "SpotHero consumer endpoints at spothero.com/api/v1 use browser session cookies. Sign in at spothero.com, then auth login --chrome or --cookies-file. Not the partner X-API-Key API.",
+  "description": "Agent-native CLI for SpotHero consumer accounts: search parking, list reservations, and hard-gated book/cancel.",
+  "novel_features": [
+    {
+      "name": "Hard-gated live booking",
+      "command": "book place",
+      "description": "Charges only with --enable-live-booking --owner-approved --confirm \"PLACE SPOTHERO BOOKING\"; book preview never posts checkout."
+    },
+    {
+      "name": "Token-gated cancellation",
+      "command": "cancel",
+      "description": "cancel preview issues a short-lived confirm token; cancel requires --yes --confirm <token>."
+    },
+    {
+      "name": "Consumer session auth",
+      "command": "auth login",
+      "description": "Chrome or Playwright storage-state cookie import; secrets stored mode 0600, never printed."
+    }
+  ],
+  "spec_path": "PLAN.md",
+  "spec_format": "markdown",
+  "spec_source": "reverse-engineered",
+  "spec_checksum": "sha256:pending"
+}
