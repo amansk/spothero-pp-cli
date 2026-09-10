@@ -17,9 +17,10 @@ func newSearchCmd(opt *Options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "search",
 		Short: "Search parking near an address or coordinates",
+		Long:  "Geocodes via spothero.com search-params, then queries Craig bulk transient inventory (api.spothero.com/v2). Naive --starts/--ends are interpreted in the search city's local timezone when known; use RFC3339 with Z or offset to override.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if starts == "" || ends == "" {
-				return exitcode.Usagef("--starts and --ends are required (e.g. 2026-09-11T09:30)")
+				return exitcode.Usagef("--starts and --ends are required (e.g. 2026-09-15T09:00)")
 			}
 			hasAddr := strings.TrimSpace(address) != ""
 			hasCoords := lat != 0 || lng != 0
@@ -44,30 +45,26 @@ func newSearchCmd(opt *Options) *cobra.Command {
 			if opt.JSON || opt.Agent {
 				return writeOut(cmd, opt, result)
 			}
-			if len(result.Facilities) == 0 {
-				msg := "No facilities found via GET /api/v1/facilities/.\n"
-				if result.EmptyHint != "" {
-					msg += result.EmptyHint + "\n"
-				}
-				_, _ = cmd.OutOrStdout().Write([]byte(msg))
+			if len(result.Results) == 0 {
+				_, _ = cmd.OutOrStdout().Write([]byte("No parking spots found for this window.\n"))
 				return nil
 			}
-			rows := make([][]string, 0, len(result.Facilities))
-			for _, f := range result.Facilities {
+			rows := make([][]string, 0, len(result.Results))
+			for _, s := range result.Results {
 				rows = append(rows, []string{
-					strconv.Itoa(f.ID),
-					f.Title,
-					f.Price,
-					strconv.FormatFloat(f.Distance, 'f', 2, 64),
+					strconv.Itoa(s.FacilityID),
+					s.Title,
+					s.Price,
+					strconv.Itoa(s.DistanceMeters),
 				})
 			}
-			return output.Table(cmd.OutOrStdout(), []string{"ID", "TITLE", "PRICE", "DIST_M"}, rows)
+			return output.Table(cmd.OutOrStdout(), []string{"ID", "TITLE", "PRICE", "WALK_M"}, rows)
 		},
 	}
 	cmd.Flags().StringVar(&address, "address", "", "Street address or POI to search near")
 	cmd.Flags().Float64Var(&lat, "lat", 0, "Latitude")
 	cmd.Flags().Float64Var(&lng, "lng", 0, "Longitude")
-	cmd.Flags().StringVar(&starts, "starts", "", "Parking start (local or ISO datetime)")
-	cmd.Flags().StringVar(&ends, "ends", "", "Parking end (local or ISO datetime)")
+	cmd.Flags().StringVar(&starts, "starts", "", "Parking start (local or RFC3339)")
+	cmd.Flags().StringVar(&ends, "ends", "", "Parking end (local or RFC3339)")
 	return cmd
 }

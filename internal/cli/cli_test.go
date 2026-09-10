@@ -18,9 +18,9 @@ func mockHTTP(t *testing.T) *client.Client {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/search-params/":
-			_, _ = w.Write([]byte(`{"data":{"latitude":41.88,"longitude":-87.62,"starts":"2026-09-11T09:30","ends":"2026-09-11T12:30","sort":"distance","sort_order":"asc","distance_lt":1609}}`))
-		case "/facilities/":
-			_, _ = w.Write([]byte(`{"data":{"results":[{"id":1,"title":"Lot","price":"$5","distance":50}]}}`))
+			_, _ = w.Write([]byte(`{"data":{"latitude":41.88,"longitude":-87.62,"starts":"2026-09-11T09:30","ends":"2026-09-11T12:30","sort":"distance","sort_order":"asc","distance_lt":1609,"page_info":{"setup":{"city":{"slug":"chicago"}}}}}`))
+		case "/search/bulk/transient":
+			_, _ = w.Write([]byte(`{"results":[{"distance":{"walking_meters":50},"average_price":{"value":500},"facility":{"common":{"id":"1","title":"Lot","status":"on_sales_allowed","addresses":[{"street_address":"1 Main","city":"Chicago","state":"IL","postal_code":"60601","types":["search"]}]}}}]}`))
 		case "/user/":
 			_, _ = w.Write([]byte(`{"data":{"id":1,"email":"user@example.com"}}`))
 		case "/reservations/":
@@ -36,6 +36,7 @@ func mockHTTP(t *testing.T) *client.Client {
 	t.Cleanup(srv.Close)
 	c := client.New(&auth.Session{RawCookieHeader: "s=1"})
 	c.BaseURL = srv.URL
+	c.CraigBaseURL = srv.URL
 	c.HTTP = srv.Client()
 	return c
 }
@@ -134,7 +135,7 @@ func TestDoctorLivePassesWhenUser401ButReservationsOK(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/search-params/":
-			_, _ = w.Write([]byte(`{"data":{"latitude":41.88,"longitude":-87.62,"starts":"2026-09-11T09:30","ends":"2026-09-11T12:30","sort":"distance","sort_order":"asc","distance_lt":1609}}`))
+			_, _ = w.Write([]byte(`{"data":{"latitude":41.88,"longitude":-87.62,"starts":"2026-09-11T09:30","ends":"2026-09-11T12:30","sort":"distance","sort_order":"asc","distance_lt":1609,"page_info":{"setup":{"city":{"slug":"chicago"}}}}}`))
 		case "/reservations/":
 			_, _ = w.Write([]byte(`{"meta":{"count":1},"data":{"results":[{"rental_id":1,"price":100,"status":"success"}]}}`))
 		case "/user/":

@@ -1,0 +1,54 @@
+{
+  "@next": "https://api.spothero.com/v2/search/bulk/transient?after=13970",
+  "results": [
+    {
+      "distance": {
+        "walking_distance_status": "ok",
+        "walking_meters": 63,
+        "linear_meters": 59.44
+      },
+      "average_price": {
+        "currency_code": "USD",
+        "value": 4000
+      },
+      "facility": {
+        "common": {
+          "id": "86395",
+          "title": "524 Howard St. - Lot",
+          "slug": "524-howard-st-2",
+          "status": "on_sales_allowed",
+          "addresses": [
+            {
+              "street_address": "524 Howard Street",
+              "city": "San Francisco",
+              "state": "CA",
+              "postal_code": "94105",
+              "types": ["search", "default_vehicle_entrance"]
+            }
+          ]
+        }
+      },
+      "bulk_rates": [
+        {
+          "rates": [
+            {
+              "quote": {
+                "meta": {
+                  "quote_mac": "REDACTED",
+                  "quote_token": "REDACTED"
+                },
+                "total_price": {
+                  "currency_code": "USD",
+                  "value": 4340
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "options": {
+        "commuter_card_eligible": false
+      }
+    }
+  ]
+}

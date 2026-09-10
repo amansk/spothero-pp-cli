@@ -50,30 +50,6 @@ func TestSearchParams(t *testing.T) {
 	}
 }
 
-func TestListFacilities(t *testing.T) {
-	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/facilities/" {
-			t.Fatalf("path=%s", r.URL.Path)
-		}
-		_, _ = w.Write(envelope(map[string]any{
-			"results": []map[string]any{{
-				"id": 123, "title": "Garage A", "price": "$12.00", "distance": 100,
-			}},
-		}))
-	})
-	list, err := c.ListFacilities(client.SearchParams{
-		Latitude: 41.88, Longitude: -87.62,
-		Starts: "2026-09-11T09:30", Ends: "2026-09-11T12:30",
-		Sort: "distance", SortOrder: "asc", DistanceLT: 1609,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(list) != 1 || list[0].ID != 123 {
-		t.Fatalf("list=%+v", list)
-	}
-}
-
 func TestNotAuthenticated(t *testing.T) {
 	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -149,13 +125,16 @@ func TestSearchIntegration(t *testing.T) {
 				"latitude": 41.88, "longitude": -87.62,
 				"starts": "2026-09-11T09:30", "ends": "2026-09-11T12:30",
 				"sort": "distance", "sort_order": "asc", "distance_lt": 1609.0,
+				"page_info": map[string]any{"setup": map[string]any{"city": map[string]any{"slug": "chicago"}}},
 			}))
-		case "/facilities/":
-			_, _ = w.Write(envelope(map[string]any{"results": []any{}}))
+		case "/search/bulk/transient":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"results":[{"distance":{"walking_meters":100},"average_price":{"value":1200},"facility":{"common":{"id":"99","title":"Lot","status":"on_sales_allowed","addresses":[]}}}]}`))
 		default:
 			t.Fatalf("unexpected %s", r.URL.Path)
 		}
 	})
+	c.CraigBaseURL = c.BaseURL
 	res, err := c.Search(client.SearchQuery{
 		Address: "Chicago, IL",
 		Starts:  "2026-09-11T09:30",
@@ -164,7 +143,7 @@ func TestSearchIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Params.Latitude != 41.88 {
-		t.Fatalf("params=%+v", res.Params)
+	if res.Params.Latitude != 41.88 || len(res.Results) != 1 {
+		t.Fatalf("params=%+v results=%d", res.Params, len(res.Results))
 	}
 }

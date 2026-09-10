@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -17,11 +16,12 @@ import (
 
 // Client calls SpotHero consumer web session APIs.
 type Client struct {
-	BaseURL    string
-	HTTP       *http.Client
-	Session    *auth.Session
-	UserAgent  string
-	DryRun     bool
+	BaseURL      string
+	CraigBaseURL string
+	HTTP         *http.Client
+	Session      *auth.Session
+	UserAgent    string
+	DryRun       bool
 }
 
 func New(session *auth.Session) *Client {
@@ -29,7 +29,7 @@ func New(session *auth.Session) *Client {
 		BaseURL: DefaultBaseURL,
 		HTTP:    &http.Client{Timeout: 30 * time.Second},
 		Session: session,
-		UserAgent: "spothero-pp-cli/0.1.1 (+https://github.com/amansk/spothero-pp-cli)",
+		UserAgent: "spothero-pp-cli/0.1.2 (+https://github.com/amansk/spothero-pp-cli)",
 	}
 }
 
@@ -228,24 +228,60 @@ func truncate(s string, n int) string {
 	return s[:n] + "..."
 }
 
-// Search resolves search parameters then lists facilities.
+// Search geocodes via search-params then queries Craig bulk transient inventory.
 func (c *Client) Search(q SearchQuery) (*SearchResult, error) {
 	params, err := c.GetSearchParams(q)
 	if err != nil {
 		return nil, err
 	}
-	facilities, err := c.ListFacilities(params)
+	periods, loc, err := periodsToUTC(q.Starts, q.Ends, params)
+	if err != nil {
+		return nil, exitcode.Usagef("%v", err)
+	}
+	maxDist := int(params.DistanceLT)
+	if maxDist <= 0 {
+		maxDist = 1609
+	}
+	req := BulkTransientSearchRequest{
+		Periods:                periods,
+		Oversize:               false,
+		ShowUnavailable:        false,
+		SortBy:                 "relevance",
+		IncludeWalkingDistance: true,
+		MaxDistanceMeters:      maxDist,
+		PageSize:               25,
+	}
+	resp, err := c.searchBulkTransient(params.Latitude, params.Longitude, req)
 	if err != nil {
 		return nil, err
 	}
-	result := &SearchResult{Params: params, Facilities: facilities}
-	if len(facilities) == 0 {
-		result.EmptyHint = searchEmptyHint
+	spots, err := parseCraigSearchResults(resp.Results)
+	if err != nil {
+		return nil, err
 	}
-	return result, nil
+	note := ""
+	if loc != nil && loc != time.UTC {
+		note = fmt.Sprintf("Naive --starts/--ends interpreted in %s (from search city). Pass RFC3339 with offset or Z to override.", loc.String())
+	} else if !hasExplicitOffset(q.Starts) {
+		note = "Naive --starts/--ends interpreted as UTC (city timezone unknown). Pass RFC3339 with offset for local wall times."
+	}
+	return &SearchResult{
+		Params:       params,
+		PeriodsUTC:   periods,
+		TimezoneNote: note,
+		Results:      spots,
+		Count:        len(spots),
+		NextURL:      resp.Next,
+	}, nil
 }
 
-const searchEmptyHint = "GET /api/v1/facilities/ returned zero results. The spothero.com web app uses a separate inventory API (api.spothero.com/v2/search/transient with session/search UUIDs) not yet wired in this CLI — see PLAN.md. Query params forwarded from search-params may still be incomplete pending HAR capture."
+func hasExplicitOffset(raw string) bool {
+	raw = strings.TrimSpace(raw)
+	if strings.HasSuffix(strings.ToUpper(raw), "Z") {
+		return true
+	}
+	return strings.Contains(raw, "+") || strings.Count(raw, "-") > 2
+}
 
 // SearchQuery input for search.
 type SearchQuery struct {
@@ -280,7 +316,8 @@ func (c *Client) GetSearchParams(q SearchQuery) (SearchParams, error) {
 		PageInfo struct {
 			Setup struct {
 				City struct {
-					ID int `json:"id"`
+					ID   int    `json:"id"`
+					Slug string `json:"slug"`
 				} `json:"city"`
 			} `json:"setup"`
 		} `json:"page_info"`
@@ -291,38 +328,8 @@ func (c *Client) GetSearchParams(q SearchQuery) (SearchParams, error) {
 	out := wire.SearchParams
 	out.GooglePlaceID = wire.GooglePlace.PlaceID
 	out.CityID = wire.PageInfo.Setup.City.ID
+	out.CitySlug = wire.PageInfo.Setup.City.Slug
 	return out, nil
-}
-
-func (c *Client) ListFacilities(p SearchParams) ([]Facility, error) {
-	v := url.Values{}
-	v.Set("latitude", fmt.Sprintf("%f", p.Latitude))
-	v.Set("longitude", fmt.Sprintf("%f", p.Longitude))
-	v.Set("starts", p.Starts)
-	v.Set("ends", p.Ends)
-	v.Set("sort", p.Sort)
-	v.Set("sort_order", p.SortOrder)
-	if p.DistanceLT > 0 {
-		v.Set("distance_lt", fmt.Sprintf("%f", p.DistanceLT))
-	}
-	v.Set("distance_gt", fmt.Sprintf("%f", p.DistanceGT))
-	if p.IdealSearchDistance > 0 {
-		v.Set("ideal_search_distance", fmt.Sprintf("%f", p.IdealSearchDistance))
-	}
-	if p.GooglePlaceID != "" {
-		v.Set("place_id", p.GooglePlaceID)
-	}
-	if p.CityID > 0 {
-		v.Set("city_id", strconv.Itoa(p.CityID))
-	}
-	v.Set("monthly", strconv.FormatBool(p.Monthly))
-	v.Set("airport", strconv.FormatBool(p.Airport))
-	path := PathFacilities + "?" + v.Encode()
-	var resp FacilitiesResponse
-	if err := c.doJSON(http.MethodGet, path, nil, &resp); err != nil {
-		return nil, err
-	}
-	return resp.Results, nil
 }
 
 func (c *Client) GetFacilityRates(facilityID int, starts, ends string) ([]RateQuote, error) {

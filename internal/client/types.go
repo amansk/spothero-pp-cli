@@ -31,35 +31,32 @@ type SearchParams struct {
 	SearchString          string  `json:"search_string"`
 	SearchURL             string  `json:"search_url"`
 	IdealSearchDistance   float64 `json:"ideal_search_distance"`
-	GooglePlaceID         string  `json:"-"`
-	CityID                int     `json:"-"`
+	GooglePlaceID       string  `json:"-"`
+	CityID              int     `json:"-"`
+	CitySlug            string  `json:"city_slug,omitempty"`
 }
 
-// SearchResult combines normalized params and facility results.
+// SearchSpot is one Craig bulk transient search hit mapped for CLI output.
+type SearchSpot struct {
+	FacilityID     int    `json:"facility_id"`
+	Title          string `json:"title"`
+	Address        string `json:"address,omitempty"`
+	Slug           string `json:"slug,omitempty"`
+	DistanceMeters int    `json:"distance_meters"`
+	PriceCents     int    `json:"price_cents"`
+	Price          string `json:"price"`
+	Available      bool   `json:"available"`
+	Status         string `json:"status,omitempty"`
+}
+
+// SearchResult combines geocode params and Craig inventory results.
 type SearchResult struct {
-	Params     SearchParams `json:"params"`
-	Facilities []Facility   `json:"facilities"`
-	// EmptyHint is set when facilities returns zero rows (known incomplete query).
-	EmptyHint string `json:"empty_hint,omitempty"`
-}
-
-// Facility is a parking location search result.
-type Facility struct {
-	ID          int     `json:"id"`
-	Title       string  `json:"title"`
-	Address     string  `json:"address"`
-	Distance    float64 `json:"distance"`
-	PriceCents  int     `json:"price_cents"`
-	Price       string  `json:"price"`
-	Latitude    float64 `json:"latitude"`
-	Longitude   float64 `json:"longitude"`
-	Available   bool    `json:"available"`
-	Slug        string  `json:"slug"`
-}
-
-// FacilitiesResponse is GET /facilities/ data payload.
-type FacilitiesResponse struct {
-	Results []Facility `json:"results"`
+	Params       SearchParams   `json:"params"`
+	PeriodsUTC   []SearchPeriod `json:"periods_utc"`
+	TimezoneNote string         `json:"timezone_note,omitempty"`
+	Results      []SearchSpot   `json:"results"`
+	Count        int            `json:"count"`
+	NextURL      string         `json:"next_url,omitempty"`
 }
 
 // UserProfile is GET /user/ data payload.

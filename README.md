@@ -35,15 +35,17 @@ spothero-pp-cli doctor --json
 spothero-pp-cli auth status
 ```
 
-4. Search (address **or** lat/lng):
+4. Search (address **or** lat/lng). Uses Craig bulk transient inventory (`api.spothero.com/v2`), not the dead `/api/v1/facilities/` path:
 
 ```bash
-spothero-pp-cli search --address "233 S Wacker Dr, Chicago, IL" \
-  --starts 2026-09-11T09:30 --ends 2026-09-11T12:30 --json
+spothero-pp-cli search --address "500 Howard St, San Francisco, CA" \
+  --starts 2026-09-15T09:00 --ends 2026-09-15T17:00 --json
 
-spothero-pp-cli search --lat 41.88 --lng -87.62 \
-  --starts 2026-09-11T09:30 --ends 2026-09-11T12:30 --json
+spothero-pp-cli search --lat 37.788 --lng -122.396 \
+  --starts 2026-09-15T09:00 --ends 2026-09-15T17:00 --json
 ```
+
+Naive `--starts`/`--ends` without timezone are interpreted in the search city's local time (from geocode). Use RFC3339 with `Z` or offset to override.
 
 5. Reservations:
 
