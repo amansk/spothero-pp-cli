@@ -72,7 +72,7 @@ func SaveSession(home string, s *Session) error {
 	if err := os.WriteFile(path, b, 0o600); err != nil {
 		return err
 	}
-	return nil
+	return os.Chmod(path, 0o600)
 }
 
 // CookieValue returns a named cookie from the session, if present.

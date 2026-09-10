@@ -25,19 +25,29 @@ func newCancelCmd(opt *Options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := consumeCancelToken(home, confirm, args[0]); err != nil {
-				return exitcode.Usagef("%v", err)
-			}
 			c, err := opt.newClient()
 			if err != nil {
 				return err
 			}
 			if opt.DryRun {
+				if err := validateCancelToken(home, confirm, args[0]); err != nil {
+					return exitcode.Usagef("%v", err)
+				}
 				return writeOut(cmd, opt, map[string]any{
 					"dry_run":    true,
 					"would_post": client.PathReservationRefund,
 					"id":         args[0],
 				})
+			}
+			if err := consumeCancelToken(home, confirm, args[0]); err != nil {
+				return exitcode.Usagef("%v", err)
+			}
+			res, err := c.GetReservation(args[0])
+			if err != nil {
+				return err
+			}
+			if !res.Cancellable {
+				return exitcode.Usagef("reservation %s is not refundable", args[0])
 			}
 			out, err := c.RefundReservation(args[0])
 			if err != nil {
@@ -69,6 +79,9 @@ func newCancelPreviewCmd(opt *Options) *cobra.Command {
 			res, err := c.GetReservation(args[0])
 			if err != nil {
 				return err
+			}
+			if !res.Cancellable {
+				return exitcode.Usagef("reservation %s is not refundable; cancel not available", args[0])
 			}
 			token, err := issueCancelToken(home, args[0])
 			if err != nil {

@@ -98,6 +98,35 @@ func TestBuildCheckoutLiveShape(t *testing.T) {
 	}
 }
 
+func TestBuildCheckoutUnknownRateID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/search/transient/6698":
+			_, _ = w.Write(facilityQuoteFixture)
+		default:
+			t.Fatalf("unexpected %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	c := New(&auth.Session{Cookies: map[string]string{"sessionid": "abc"}})
+	c.CraigBaseURL = srv.URL
+	c.BaseURL = srv.URL
+	c.HTTP = srv.Client()
+
+	_, _, err := c.BuildCheckout(BookPlaceInput{
+		FacilityID:   6698,
+		Starts:       "2026-09-15T09:00",
+		Ends:         "2026-09-15T17:00",
+		CitySlug:     "san-francisco",
+		SelectRateID: "does-not-exist",
+	})
+	if err == nil {
+		t.Fatal("expected not-found error")
+	}
+}
+
 func TestCheckoutSetsCSRFAndVersion(t *testing.T) {
 	var gotCSRF, gotVersion string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

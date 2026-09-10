@@ -58,7 +58,11 @@ func saveConfirmTokens(home string, f confirmTokenFile) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(confirmTokensPath(home), b, 0o600)
+	path := confirmTokensPath(home)
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o600)
 }
 
 func pruneExpiredCancel(f *confirmTokenFile) {
@@ -98,8 +102,17 @@ func IssueCancelToken(home, reservationID string) (string, error) {
 	return token, nil
 }
 
+// ValidateCancelToken checks a cancel confirmation token without consuming it.
+func ValidateCancelToken(home, token, reservationID string) error {
+	return checkCancelToken(home, token, reservationID, false)
+}
+
 // ConsumeCancelToken validates and deletes a cancel confirmation token.
 func ConsumeCancelToken(home, token, reservationID string) error {
+	return checkCancelToken(home, token, reservationID, true)
+}
+
+func checkCancelToken(home, token, reservationID string, consume bool) error {
 	if home == "" {
 		return fmt.Errorf("config home required for cancel tokens")
 	}
@@ -123,6 +136,9 @@ func ConsumeCancelToken(home, token, reservationID string) error {
 	if entry.ReservationID != reservationID {
 		return fmt.Errorf("confirm token does not match reservation %s", reservationID)
 	}
-	delete(f.Cancel, token)
-	return saveConfirmTokens(home, f)
+	if consume {
+		delete(f.Cancel, token)
+		return saveConfirmTokens(home, f)
+	}
+	return nil
 }
