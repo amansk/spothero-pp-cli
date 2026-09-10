@@ -24,9 +24,11 @@ func mockHTTP(t *testing.T) *client.Client {
 		case "/user/":
 			_, _ = w.Write([]byte(`{"data":{"id":1,"email":"user@example.com"}}`))
 		case "/reservations/":
-			_, _ = w.Write([]byte(`{"data":{"results":[{"id":"r1","status":"upcoming","facility_title":"Lot","starts":"2026-09-11T09:30","price":"$5"}]}}`))
+			_, _ = w.Write([]byte(`{"data":{"results":[{"rental_id":132887395,"display_id":"132887395","status":"success","price":1908,"is_cancellable":true,"starts":"2026-09-11T09:30","facility":{"title":"Lot"}}]}}`))
+		case "/reservations/132887395/":
+			_, _ = w.Write([]byte(`{"data":{"rental_id":132887395,"status":"success","is_cancellable":true}}`))
 		case "/reservations/r1/":
-			_, _ = w.Write([]byte(`{"data":{"id":"r1","status":"upcoming","cancellable":true}}`))
+			_, _ = w.Write([]byte(`{"data":{"rental_id":1,"display_id":"r1","status":"upcoming","is_cancellable":true}}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -88,9 +90,31 @@ func TestBookPlaceRequiresExactConfirm(t *testing.T) {
 }
 
 func TestCancelRequiresToken(t *testing.T) {
-	code, _, _ := runCLI(t, "cancel", "r1")
+	code, _, _ := runCLI(t, "cancel", "132887395")
 	if code != 2 {
 		t.Fatalf("code=%d", code)
+	}
+}
+
+func TestReservationsListLiveShapeJSON(t *testing.T) {
+	code, out, errOut := runCLI(t, "--json", "reservations", "list")
+	if code != 0 {
+		t.Fatalf("code=%d err=%q out=%q", code, errOut, out)
+	}
+	var payload struct {
+		Reservations []struct {
+			ID         string `json:"id"`
+			PriceCents int    `json:"price_cents"`
+		} `json:"reservations"`
+	}
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Reservations) != 1 || payload.Reservations[0].ID != "132887395" {
+		t.Fatalf("%+v", payload.Reservations)
+	}
+	if payload.Reservations[0].PriceCents != 1908 {
+		t.Fatalf("price_cents=%d", payload.Reservations[0].PriceCents)
 	}
 }
 
@@ -102,5 +126,46 @@ func TestDoctor(t *testing.T) {
 	root.SetArgs([]string{"doctor", "--json"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDoctorLivePassesWhenUser401ButReservationsOK(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/search-params/":
+			_, _ = w.Write([]byte(`{"data":{"latitude":41.88,"longitude":-87.62,"starts":"2026-09-11T09:30","ends":"2026-09-11T12:30","sort":"distance","sort_order":"asc","distance_lt":1609}}`))
+		case "/reservations/":
+			_, _ = w.Write([]byte(`{"meta":{"count":1},"data":{"results":[{"rental_id":1,"price":100,"status":"success"}]}}`))
+		case "/user/":
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"data":{"errors":[{"code":"not_authenticated","messages":["nope"]}]}}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	home := t.TempDir()
+	if err := auth.SaveSession(home, &auth.Session{RawCookieHeader: "s=1", Source: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	c := client.New(&auth.Session{RawCookieHeader: "s=1"})
+	c.BaseURL = srv.URL
+	c.HTTP = srv.Client()
+	var out bytes.Buffer
+	root := cli.NewRootForTest(&cli.Options{HTTP: c, Home: home})
+	root.SetOut(&out)
+	root.SetArgs([]string{"doctor", "--live", "--json", "--home", home})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var report struct {
+		OK bool `json:"ok"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if !report.OK {
+		t.Fatalf("doctor should pass: %s", out.String())
 	}
 }

@@ -60,7 +60,7 @@ func newReservationsGetCmd(opt *Options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if res.ID == "" {
+			if res.ID == "" && res.RentalID == 0 {
 				return exitcode.NotFoundf("reservation %s not found", args[0])
 			}
 			return writeOut(cmd, opt, res)

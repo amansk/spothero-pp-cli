@@ -29,7 +29,7 @@ func New(session *auth.Session) *Client {
 		BaseURL: DefaultBaseURL,
 		HTTP:    &http.Client{Timeout: 30 * time.Second},
 		Session: session,
-		UserAgent: "spothero-pp-cli/0.1.0 (+https://github.com/amansk/spothero-pp-cli)",
+		UserAgent: "spothero-pp-cli/0.1.1 (+https://github.com/amansk/spothero-pp-cli)",
 	}
 }
 
@@ -103,6 +103,54 @@ func (c *Client) doJSON(method, path string, body any, out any) error {
 		return err
 	}
 	return json.Unmarshal(b, out)
+}
+
+func (c *Client) doJSONData(method, path string, body any) (json.RawMessage, error) {
+	if c.DryRun && method != http.MethodGet && method != http.MethodHead {
+		return nil, exitcode.Usagef("dry-run: would %s %s", method, path)
+	}
+	var rdr io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+		rdr = bytes.NewReader(b)
+	}
+	req, err := c.newRequest(method, path, rdr)
+	if err != nil {
+		return nil, err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, exitcode.Transientf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return nil, exitcode.Transientf("rate limited (HTTP 429)")
+	}
+	var env Envelope
+	if err := json.Unmarshal(raw, &env); err != nil {
+		if resp.StatusCode >= 400 {
+			return nil, exitcode.APIf("HTTP %d: %s", resp.StatusCode, truncate(string(raw), 200))
+		}
+		return nil, exitcode.APIf("decode response: %v", err)
+	}
+	if err := checkEnvelope(resp.StatusCode, env); err != nil {
+		return nil, err
+	}
+	b, err := json.Marshal(env.Data)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
 }
 
 func checkEnvelope(status int, env Envelope) error {
@@ -190,8 +238,14 @@ func (c *Client) Search(q SearchQuery) (*SearchResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &SearchResult{Params: params, Facilities: facilities}, nil
+	result := &SearchResult{Params: params, Facilities: facilities}
+	if len(facilities) == 0 {
+		result.EmptyHint = searchEmptyHint
+	}
+	return result, nil
 }
+
+const searchEmptyHint = "GET /api/v1/facilities/ returned zero results. The spothero.com web app uses a separate inventory API (api.spothero.com/v2/search/transient with session/search UUIDs) not yet wired in this CLI — see PLAN.md. Query params forwarded from search-params may still be incomplete pending HAR capture."
 
 // SearchQuery input for search.
 type SearchQuery struct {
@@ -200,12 +254,6 @@ type SearchQuery struct {
 	Longitude float64
 	Starts    string
 	Ends      string
-}
-
-// SearchResult combines normalized params and facility results.
-type SearchResult struct {
-	Params     SearchParams `json:"params"`
-	Facilities []Facility   `json:"facilities"`
 }
 
 func (c *Client) GetSearchParams(q SearchQuery) (SearchParams, error) {
@@ -220,10 +268,29 @@ func (c *Client) GetSearchParams(q SearchQuery) (SearchParams, error) {
 	v.Set("starts", q.Starts)
 	v.Set("ends", q.Ends)
 	path := PathSearchParams + "?" + v.Encode()
-	var out SearchParams
-	if err := c.doJSON(http.MethodGet, path, nil, &out); err != nil {
+	raw, err := c.doJSONData(http.MethodGet, path, nil)
+	if err != nil {
 		return SearchParams{}, err
 	}
+	var wire struct {
+		SearchParams
+		GooglePlace struct {
+			PlaceID string `json:"place_id"`
+		} `json:"google_place"`
+		PageInfo struct {
+			Setup struct {
+				City struct {
+					ID int `json:"id"`
+				} `json:"city"`
+			} `json:"setup"`
+		} `json:"page_info"`
+	}
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		return SearchParams{}, exitcode.APIf("decode search-params: %v", err)
+	}
+	out := wire.SearchParams
+	out.GooglePlaceID = wire.GooglePlace.PlaceID
+	out.CityID = wire.PageInfo.Setup.City.ID
 	return out, nil
 }
 
@@ -238,8 +305,15 @@ func (c *Client) ListFacilities(p SearchParams) ([]Facility, error) {
 	if p.DistanceLT > 0 {
 		v.Set("distance_lt", fmt.Sprintf("%f", p.DistanceLT))
 	}
-	if p.DistanceGT > 0 {
-		v.Set("distance_gt", fmt.Sprintf("%f", p.DistanceGT))
+	v.Set("distance_gt", fmt.Sprintf("%f", p.DistanceGT))
+	if p.IdealSearchDistance > 0 {
+		v.Set("ideal_search_distance", fmt.Sprintf("%f", p.IdealSearchDistance))
+	}
+	if p.GooglePlaceID != "" {
+		v.Set("place_id", p.GooglePlaceID)
+	}
+	if p.CityID > 0 {
+		v.Set("city_id", strconv.Itoa(p.CityID))
 	}
 	v.Set("monthly", strconv.FormatBool(p.Monthly))
 	v.Set("airport", strconv.FormatBool(p.Airport))
@@ -284,23 +358,56 @@ func (c *Client) GetUser() (UserProfile, error) {
 }
 
 func (c *Client) ListReservations() ([]Reservation, error) {
-	var resp ReservationsResponse
-	if err := c.doJSON(http.MethodGet, PathReservations, nil, &resp); err != nil {
-		// Some responses may return a bare array.
-		var list []Reservation
-		if err2 := c.doJSON(http.MethodGet, PathReservations, nil, &list); err2 == nil {
-			return list, nil
-		}
+	return c.listReservations("")
+}
+
+// ProbeSessionAuth verifies cookie session using a minimal reservations read.
+// Live smoke: GET /user/ may 401 even when reservations work — do not use /user/ alone.
+func (c *Client) ProbeSessionAuth() error {
+	_, err := c.listReservations("1")
+	return err
+}
+
+func (c *Client) listReservations(pageSize string) ([]Reservation, error) {
+	path := PathReservations
+	if pageSize != "" {
+		path += "?page_size=" + url.QueryEscape(pageSize)
+	}
+	raw, err := c.doJSONData(http.MethodGet, path, nil)
+	if err != nil {
 		return nil, err
 	}
-	return resp.Results, nil
+	return parseReservationsPayload(raw)
 }
 
 func (c *Client) GetReservation(id string) (Reservation, error) {
 	path := fmt.Sprintf(PathReservation, url.PathEscape(id))
-	var out Reservation
-	if err := c.doJSON(http.MethodGet, path, nil, &out); err != nil {
+	raw, err := c.doJSONData(http.MethodGet, path, nil)
+	if err != nil {
 		return Reservation{}, err
+	}
+	list, err := parseReservationsPayload(raw)
+	if err != nil {
+		return Reservation{}, err
+	}
+	if len(list) == 1 {
+		return list[0], nil
+	}
+	if len(list) > 1 {
+		for _, r := range list {
+			if r.ID == id || r.DisplayID == id || r.QRCodeUUID == id {
+				return r, nil
+			}
+		}
+		return list[0], nil
+	}
+	var wire reservationWire
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		return Reservation{}, exitcode.APIf("decode reservation: %v", err)
+	}
+	out := normalizeReservation(wire)
+	if out.ID == "" {
+		return Reservation{}, exitcode.NotFoundf("reservation %s not found", id)
 	}
 	return out, nil
 }

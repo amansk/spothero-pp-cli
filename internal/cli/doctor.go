@@ -49,11 +49,17 @@ func newDoctorCmd(opt *Options) *cobra.Command {
 					checks = append(checks, map[string]any{"name": "live_ping", "ok": true, "detail": "search-params reachable"})
 				}
 				if sess != nil && sess.CookieHeader() != "" {
-					if _, err := c.GetUser(); err != nil {
-						checks = append(checks, map[string]any{"name": "live_user", "ok": false, "detail": err.Error()})
+					if err := c.ProbeSessionAuth(); err != nil {
+						checks = append(checks, map[string]any{"name": "live_session", "ok": false, "detail": err.Error()})
 						report["ok"] = false
 					} else {
-						checks = append(checks, map[string]any{"name": "live_user", "ok": true, "detail": "session valid"})
+						checks = append(checks, map[string]any{"name": "live_session", "ok": true, "detail": "GET /reservations/?page_size=1 succeeded"})
+					}
+					// /user/ often 401 with valid cookie sessions (live smoke Sep 2026); informational only.
+					if _, err := c.GetUser(); err != nil {
+						checks = append(checks, map[string]any{"name": "live_user", "ok": true, "detail": "skipped: " + err.Error() + " (reservations auth is authoritative)"})
+					} else {
+						checks = append(checks, map[string]any{"name": "live_user", "ok": true, "detail": "GET /user/ succeeded"})
 					}
 				}
 			}

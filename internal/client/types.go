@@ -28,8 +28,19 @@ type SearchParams struct {
 	DistanceGT    float64 `json:"distance_gt"`
 	Monthly       bool    `json:"monthly"`
 	Airport       bool    `json:"airport"`
-	SearchString  string  `json:"search_string"`
-	SearchURL     string  `json:"search_url"`
+	SearchString          string  `json:"search_string"`
+	SearchURL             string  `json:"search_url"`
+	IdealSearchDistance   float64 `json:"ideal_search_distance"`
+	GooglePlaceID         string  `json:"-"`
+	CityID                int     `json:"-"`
+}
+
+// SearchResult combines normalized params and facility results.
+type SearchResult struct {
+	Params     SearchParams `json:"params"`
+	Facilities []Facility   `json:"facilities"`
+	// EmptyHint is set when facilities returns zero rows (known incomplete query).
+	EmptyHint string `json:"empty_hint,omitempty"`
 }
 
 // Facility is a parking location search result.
@@ -49,26 +60,6 @@ type Facility struct {
 // FacilitiesResponse is GET /facilities/ data payload.
 type FacilitiesResponse struct {
 	Results []Facility `json:"results"`
-}
-
-// Reservation is a consumer parking reservation.
-type Reservation struct {
-	ID              string `json:"id"`
-	Status          string `json:"status"`
-	FacilityID      int    `json:"facility_id"`
-	FacilityTitle   string `json:"facility_title"`
-	Starts          string `json:"starts"`
-	Ends            string `json:"ends"`
-	ConfirmationCode string `json:"confirmation_code"`
-	PriceCents      int    `json:"price_cents"`
-	Price           string `json:"price"`
-	Barcode         string `json:"barcode"`
-	Cancellable     bool   `json:"cancellable"`
-}
-
-// ReservationsResponse is GET /reservations/ data payload.
-type ReservationsResponse struct {
-	Results []Reservation `json:"results"`
 }
 
 // UserProfile is GET /user/ data payload.

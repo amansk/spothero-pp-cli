@@ -45,7 +45,11 @@ func newSearchCmd(opt *Options) *cobra.Command {
 				return writeOut(cmd, opt, result)
 			}
 			if len(result.Facilities) == 0 {
-				_, _ = cmd.OutOrStdout().Write([]byte("No facilities found.\n"))
+				msg := "No facilities found via GET /api/v1/facilities/.\n"
+				if result.EmptyHint != "" {
+					msg += result.EmptyHint + "\n"
+				}
+				_, _ = cmd.OutOrStdout().Write([]byte(msg))
 				return nil
 			}
 			rows := make([][]string, 0, len(result.Facilities))

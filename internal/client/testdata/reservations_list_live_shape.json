@@ -1,0 +1,19 @@
+{
+  "results": [
+    {
+      "rental_id": 132887395,
+      "display_id": "132887395",
+      "qrcode_uuid": "132887395",
+      "facility_id": 107496,
+      "starts": "2026-09-10T18:00:00-07:00",
+      "ends": "2026-09-10T22:00:00-07:00",
+      "status": "success",
+      "price": 1908,
+      "is_cancellable": true,
+      "facility": {
+        "id": 107496,
+        "title": "Example Garage - Covered Valet"
+      }
+    }
+  ]
+}

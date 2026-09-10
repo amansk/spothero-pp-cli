@@ -104,6 +104,43 @@ func TestCheckoutDryRun(t *testing.T) {
 	}
 }
 
+func TestListReservationsLiveShape(t *testing.T) {
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/reservations/" {
+			t.Fatalf("path=%s", r.URL.Path)
+		}
+		_, _ = w.Write(envelope(map[string]any{
+			"results": []map[string]any{{
+				"rental_id":      132887395,
+				"display_id":     "132887395",
+				"price":          1908,
+				"status":         "success",
+				"is_cancellable": true,
+				"facility":       map[string]any{"title": "Garage"},
+			}},
+		}))
+	})
+	list, err := c.ListReservations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list[0].ID != "132887395" || list[0].PriceCents != 1908 {
+		t.Fatalf("%+v", list[0])
+	}
+}
+
+func TestProbeSessionAuthUsesPageSize(t *testing.T) {
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page_size") != "1" {
+			t.Fatalf("page_size=%q", r.URL.Query().Get("page_size"))
+		}
+		_, _ = w.Write(envelope(map[string]any{"results": []any{}}))
+	})
+	if err := c.ProbeSessionAuth(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestSearchIntegration(t *testing.T) {
 	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
