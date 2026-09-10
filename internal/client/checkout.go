@@ -24,11 +24,16 @@ func (c *Client) BuildCheckout(in BookPlaceInput) (CheckoutRequest, RateQuote, e
 	}
 	chosen := quote.Rates[0]
 	if in.SelectRateID != "" {
+		found := false
 		for _, r := range quote.Rates {
 			if r.RateID == in.SelectRateID || r.QuoteToken == in.SelectRateID {
 				chosen = r
+				found = true
 				break
 			}
+		}
+		if !found {
+			return CheckoutRequest{}, RateQuote{}, exitcode.NotFoundf("rate %q not found for facility %d", in.SelectRateID, in.FacilityID)
 		}
 	}
 	if !chosen.Available {

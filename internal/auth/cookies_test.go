@@ -44,6 +44,25 @@ func TestSaveSessionPermissions(t *testing.T) {
 	}
 }
 
+func TestSaveSessionTightensExistingPermissions(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cookies.json")
+	if err := os.WriteFile(path, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := &auth.Session{Cookies: map[string]string{"a": "b"}, Source: "test"}
+	if err := auth.SaveSession(dir, s); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("perm=%o", info.Mode().Perm())
+	}
+}
+
 func TestStatusNeverIncludesSecrets(t *testing.T) {
 	s, _ := auth.ParseCookieInput("secret=VALUE", "test")
 	st := s.Status()

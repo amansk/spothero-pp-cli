@@ -31,6 +31,10 @@ func mockHTTP(t *testing.T) *client.Client {
 			_, _ = w.Write([]byte(`{"data":{"results":[{"rental_id":132887395,"display_id":"132887395","status":"success","price":1908,"is_cancellable":true,"starts":"2026-09-11T09:30","facility":{"title":"Lot"}}]}}`))
 		case "/reservations/132887395/":
 			_, _ = w.Write([]byte(`{"data":{"rental_id":132887395,"status":"success","is_cancellable":true}}`))
+		case "/reservations/132887395/refund/":
+			_, _ = w.Write([]byte(`{"data":{"status":"cancelled"}}`))
+		case "/reservations/nonref/":
+			_, _ = w.Write([]byte(`{"data":{"rental_id":999,"status":"success","is_cancellable":false}}`))
 		case "/reservations/r1/":
 			_, _ = w.Write([]byte(`{"data":{"rental_id":1,"display_id":"r1","status":"upcoming","is_cancellable":true}}`))
 		case "/search/transient/6698":
@@ -196,13 +200,39 @@ func TestCancelPreviewConfirmAcrossProcesses(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &preview); err != nil {
 		t.Fatal(err)
 	}
-	code, _, errOut = runCLIWithHome(t, home, "--json", "--dry-run", "cancel", "132887395", "--yes", "--confirm", preview.ConfirmToken)
+	for i := 0; i < 2; i++ {
+		code, _, errOut = runCLIWithHome(t, home, "--json", "--dry-run", "cancel", "132887395", "--yes", "--confirm", preview.ConfirmToken)
+		if code != 0 {
+			t.Fatalf("dry-run %d code=%d err=%q", i+1, code, errOut)
+		}
+	}
+	code, _, errOut = runCLIWithHome(t, home, "--json", "cancel", "132887395", "--yes", "--confirm", preview.ConfirmToken)
 	if code != 0 {
 		t.Fatalf("cancel code=%d err=%q", code, errOut)
 	}
-	code, _, _ = runCLIWithHome(t, home, "--json", "--dry-run", "cancel", "132887395", "--yes", "--confirm", preview.ConfirmToken)
+	code, _, _ = runCLIWithHome(t, home, "--json", "cancel", "132887395", "--yes", "--confirm", preview.ConfirmToken)
 	if code != 2 {
 		t.Fatalf("expected single-use token failure, code=%d", code)
+	}
+}
+
+func TestCancelPreviewRefusesNonRefundable(t *testing.T) {
+	code, _, errOut := runCLI(t, "cancel", "preview", "nonref")
+	if code != 2 {
+		t.Fatalf("code=%d err=%q", code, errOut)
+	}
+}
+
+func TestBookPreviewUnknownRateID(t *testing.T) {
+	code, _, errOut := runCLI(t, "book", "preview",
+		"--facility-id", "6698",
+		"--starts", "2026-09-15T09:00",
+		"--ends", "2026-09-15T17:00",
+		"--city-slug", "san-francisco",
+		"--rate-id", "does-not-exist",
+	)
+	if code != 3 {
+		t.Fatalf("code=%d err=%q", code, errOut)
 	}
 }
 

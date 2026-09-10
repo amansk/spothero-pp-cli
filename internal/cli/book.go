@@ -56,11 +56,16 @@ func newBookPreviewCmd(opt *Options) *cobra.Command {
 			if len(quote.Rates) > 0 {
 				chosen := quote.Rates[0]
 				if rateID != "" {
+					found := false
 					for _, r := range quote.Rates {
 						if r.RateID == rateID || r.QuoteToken == rateID {
 							chosen = r
+							found = true
 							break
 						}
+					}
+					if !found {
+						return exitcode.NotFoundf("rate %q not found for facility %d", rateID, facilityID)
 					}
 				}
 				client.ApplyBookPreviewFromRate(&preview, chosen)
