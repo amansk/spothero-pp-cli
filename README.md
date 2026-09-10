@@ -67,7 +67,7 @@ spothero-pp-cli book preview --facility-id 12345 \
   --city-slug chicago --json
 ```
 
-Uses Craig `GET /v2/search/transient/{facilityId}` (no charge). Pass `--city-slug` from search output for naive local datetimes.
+Uses Craig `GET /v2/search/transient/{facilityId}` (no charge). Pass `--city-slug` from search output for naive local datetimes. Closed or outside-hours windows surface `unavailable_reasons` (e.g. `Outside Hours`) instead of failing later at checkout with a missing `quote_token`.
 
 Live booking requires **all three** gates (exact confirm string). The CLI refreshes the Craig quote, resolves email/phone from `/users/me/`, default card from `/users/{id}/credit-cards/` when needed, vehicle from `/users/{id}/vehicles/`, and POSTs the consumer-checkout body to `/checkout/` (nested `payment.cards[{ card_external_id }]`, `total_price`, `item_context` with `phone_number`/`quote_token`/`rental_source_title`, currency `usd`).
 

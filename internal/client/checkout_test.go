@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/amansk/spothero-pp-cli/internal/auth"
@@ -24,6 +25,9 @@ var usersCreditCardsFixture []byte
 
 //go:embed testdata/search_transient_facility_live_shape.json
 var facilityQuoteFixture []byte
+
+//go:embed testdata/search_transient_facility_outside_hours_shape.json
+var facilityOutsideHoursFixture []byte
 
 func envelopeData(data any) []byte {
 	b, _ := json.Marshal(Envelope{Data: data})
@@ -100,6 +104,36 @@ func TestBuildCheckoutLiveShape(t *testing.T) {
 	}
 	if ctx["quote_token"] != "REDACTED-QUOTE-TOKEN" || ctx["search_id"] != "REDACTED-SEARCH-ID" {
 		t.Fatalf("tracking/context=%v", ctx)
+	}
+}
+
+func TestBuildCheckoutOutsideHours(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/search/transient/144293" {
+			_, _ = w.Write(facilityOutsideHoursFixture)
+			return
+		}
+		t.Fatalf("unexpected %s", r.URL.Path)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := New(&auth.Session{Cookies: map[string]string{"sessionid": "abc"}})
+	c.CraigBaseURL = srv.URL
+	c.BaseURL = srv.URL
+	c.HTTP = srv.Client()
+
+	_, _, err := c.BuildCheckout(BookPlaceInput{
+		FacilityID: 144293,
+		Starts:     "2026-09-14T09:00",
+		Ends:       "2026-09-14T17:00",
+		CitySlug:   "chicago",
+	})
+	if err == nil {
+		t.Fatal("expected outside hours error")
+	}
+	if !strings.Contains(err.Error(), "facility not available: Outside Hours") {
+		t.Fatalf("err=%q", err.Error())
 	}
 }
 
