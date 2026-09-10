@@ -19,6 +19,9 @@ var usersMeFixture []byte
 //go:embed testdata/users_vehicles_live_shape.json
 var usersVehiclesFixture []byte
 
+//go:embed testdata/users_credit_cards_live_shape.json
+var usersCreditCardsFixture []byte
+
 //go:embed testdata/search_transient_facility_live_shape.json
 var facilityQuoteFixture []byte
 
@@ -35,6 +38,8 @@ func TestBuildCheckoutLiveShape(t *testing.T) {
 			_, _ = w.Write(facilityQuoteFixture)
 		case "/users/me/":
 			_, _ = w.Write(envelopeData(json.RawMessage(usersMeFixture)))
+		case "/users/42/credit-cards/":
+			_, _ = w.Write(envelopeData(json.RawMessage(usersCreditCardsFixture)))
 		case "/users/42/vehicles/":
 			_, _ = w.Write(envelopeData(json.RawMessage(usersVehiclesFixture)))
 		default:
@@ -75,7 +80,7 @@ func TestBuildCheckoutLiveShape(t *testing.T) {
 		t.Fatalf("use_spothero_credit=%v", payment["use_spothero_credit"])
 	}
 	cards := payment["cards"].([]any)
-	if cards[0].(map[string]any)["card_external_id"] != "REDACTED-CARD-UUID" {
+	if cards[0].(map[string]any)["card_external_id"] != "00000000-0000-4000-8000-000000000001" {
 		t.Fatalf("cards=%v", payment["cards"])
 	}
 	if _, ok := gotMap["cards"]; ok {

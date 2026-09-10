@@ -91,12 +91,18 @@ type creditCardWire struct {
 	ID             FlexInt `json:"id"`
 	CardID         FlexInt `json:"card_id"`
 	CardExternalID string  `json:"card_external_id"`
+	CardLast4      string  `json:"card_last4"`
 	IsDefault      bool    `json:"is_default"`
+	IsDeleted      bool    `json:"is_deleted"`
+	Deleted        bool    `json:"deleted"`
 }
 
 func normalizeCreditCards(wires []creditCardWire) []CreditCard {
 	out := make([]CreditCard, 0, len(wires))
 	for _, w := range wires {
+		if w.IsDeleted || w.Deleted {
+			continue
+		}
 		cardID := int(w.CardID)
 		if cardID == 0 {
 			cardID = int(w.ID)
@@ -108,6 +114,7 @@ func normalizeCreditCards(wires []creditCardWire) []CreditCard {
 		out = append(out, CreditCard{
 			CardID:         cardID,
 			CardExternalID: ext,
+			CardLast4:      w.CardLast4,
 			IsDefault:      w.IsDefault,
 		})
 	}
@@ -169,6 +176,52 @@ func resolveCardExternalID(me UserAccount, cardExternalID string, cardID int) (s
 		return "", fmt.Errorf("no card_external_id for card_id %d; pass --card-external-id", lookupID)
 	}
 	return "", fmt.Errorf("no default payment card; pass --card-external-id")
+}
+
+// ListCreditCards returns saved cards for a user id (GET /users/{id}/credit-cards/).
+func (c *Client) ListCreditCards(userID int) ([]CreditCard, error) {
+	path := fmt.Sprintf(PathUserCreditCards, userID)
+	raw, err := c.doJSONData(http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	return parseCreditCards(raw)
+}
+
+func parseCreditCards(raw json.RawMessage) ([]CreditCard, error) {
+	var list []creditCardWire
+	if err := json.Unmarshal(raw, &list); err == nil && len(list) > 0 {
+		return normalizeCreditCards(list), nil
+	}
+	var wrapped struct {
+		Results []creditCardWire `json:"results"`
+	}
+	if err := json.Unmarshal(raw, &wrapped); err != nil {
+		return nil, err
+	}
+	return normalizeCreditCards(wrapped.Results), nil
+}
+
+// EnrichCreditCards loads cards from GET /users/{id}/credit-cards/ when /users/me/ omits them.
+func (c *Client) EnrichCreditCards(me UserAccount) (UserAccount, error) {
+	if len(me.CreditCards) > 0 {
+		return me, nil
+	}
+	if me.ID == 0 {
+		return me, fmt.Errorf("account id unavailable for credit card lookup")
+	}
+	cards, err := c.ListCreditCards(me.ID)
+	if err != nil {
+		return me, err
+	}
+	me.CreditCards = cards
+	if ext, id, ok := pickDefaultCardExternal(me.CreditCards, me.DefaultCardID); ok {
+		me.DefaultCardExternalID = ext
+		if me.DefaultCardID == 0 {
+			me.DefaultCardID = id
+		}
+	}
+	return me, nil
 }
 
 // ListVehicles returns saved vehicles for a user id.
