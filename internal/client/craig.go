@@ -200,7 +200,14 @@ type rateQuoteWire struct {
 	Quote struct {
 		Meta struct {
 			QuoteToken string `json:"quote_token"`
+			QuoteMAC   string `json:"quote_mac"`
 		} `json:"meta"`
+		Order []struct {
+			RateID     FlexID    `json:"rate_id"`
+			Starts     string    `json:"starts"`
+			Ends       string    `json:"ends"`
+			TotalPrice moneyWire `json:"total_price"`
+		} `json:"order"`
 		TotalPrice      moneyWire `json:"total_price"`
 		AdvertisedPrice moneyWire `json:"advertised_price"`
 	} `json:"quote"`
@@ -330,7 +337,13 @@ func parseCraigFacilityRates(raw json.RawMessage, facilityID int, starts, ends s
 				Title  string `json:"title"`
 				Status string `json:"status"`
 			} `json:"common"`
+			Requirements struct {
+				LicensePlate bool `json:"license_plate"`
+			} `json:"requirements"`
 		} `json:"facility"`
+		Requirements struct {
+			LicensePlate bool `json:"license_plate"`
+		} `json:"requirements"`
 	}
 	if err := json.Unmarshal(raw, &wire); err != nil {
 		return nil, "", fmt.Errorf("craig facility result: %w", err)
@@ -342,24 +355,45 @@ func parseCraigFacilityRates(raw json.RawMessage, facilityID int, starts, ends s
 	if wire.Facility.Common.Status != "" && wire.Facility.Common.Status != "on_sales_allowed" {
 		available = false
 	}
+	licenseRequired := wire.Requirements.LicensePlate || wire.Facility.Requirements.LicensePlate
 	out := make([]RateQuote, 0, len(wire.Rates))
 	for _, rate := range wire.Rates {
 		cents := int(rate.Quote.TotalPrice.Value)
+		if cents <= 0 && len(rate.Quote.Order) > 0 {
+			cents = int(rate.Quote.Order[0].TotalPrice.Value)
+		}
 		if cents <= 0 {
 			cents = int(rate.Quote.AdvertisedPrice.Value)
 		}
-		rateID := rate.Quote.Meta.QuoteToken
+		rateID := ""
+		contextStarts := ""
+		contextEnds := ""
+		if len(rate.Quote.Order) > 0 {
+			rateID = rate.Quote.Order[0].RateID.String()
+			contextStarts = rate.Quote.Order[0].Starts
+			contextEnds = rate.Quote.Order[0].Ends
+		}
 		if rateID == "" {
 			rateID = rate.ID.String()
 		}
+		quoteToken := rate.Quote.Meta.QuoteToken
+		quoteMAC := rate.Quote.Meta.QuoteMAC
+		if quoteMAC == "" {
+			quoteMAC = rateID
+		}
 		out = append(out, RateQuote{
-			FacilityID: facilityID,
-			Starts:     starts,
-			Ends:       ends,
-			PriceCents: cents,
-			Price:      formatUSD(cents),
-			Available:  available,
-			RateID:     rateID,
+			FacilityID:           facilityID,
+			Starts:               starts,
+			Ends:                 ends,
+			ContextStarts:        contextStarts,
+			ContextEnds:          contextEnds,
+			PriceCents:           cents,
+			Price:                formatUSD(cents),
+			Available:            available,
+			RateID:               rateID,
+			QuoteToken:           quoteToken,
+			QuoteMAC:             quoteMAC,
+			LicensePlateRequired: licenseRequired,
 		})
 	}
 	return out, wire.Facility.Common.Title, nil

@@ -75,6 +75,34 @@ func SaveSession(home string, s *Session) error {
 	return nil
 }
 
+// CookieValue returns a named cookie from the session, if present.
+func (s *Session) CookieValue(name string) string {
+	if s == nil {
+		return ""
+	}
+	if s.Cookies != nil {
+		if v, ok := s.Cookies[name]; ok {
+			return v
+		}
+	}
+	if s.RawCookieHeader == "" {
+		return ""
+	}
+	prefix := name + "="
+	for _, part := range strings.Split(s.RawCookieHeader, ";") {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(part, prefix) {
+			return part[len(prefix):]
+		}
+	}
+	return ""
+}
+
+// CSRFToken returns the csrftoken cookie for mutating session API requests.
+func (s *Session) CSRFToken() string {
+	return s.CookieValue("csrftoken")
+}
+
 // CookieHeader returns the Cookie header value for HTTP requests.
 func (s *Session) CookieHeader() string {
 	if s == nil {

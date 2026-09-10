@@ -1,0 +1,26 @@
+{
+  "currency": "usd",
+  "email": "user@example.com",
+  "payment": {
+    "cards": [
+      {
+        "card_id": 123
+      }
+    ]
+  },
+  "items": [
+    {
+      "item_type": "rental",
+      "price": 2968,
+      "rate_id": "113821",
+      "quote_token": "REDACTED-QUOTE-TOKEN",
+      "quote_mac": "113821",
+      "item_context": {
+        "facility": 6698,
+        "starts": "2026-09-15T09:00:00-07:00",
+        "ends": "2026-09-15T17:00:00-07:00",
+        "vehicle_profile_id": 37062538
+      }
+    }
+  ]
+}

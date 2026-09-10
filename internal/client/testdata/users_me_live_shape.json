@@ -1,0 +1,7 @@
+{
+  "id": 42,
+  "email": "user@example.com",
+  "first_name": "Test",
+  "last_name": "User",
+  "default_card_id": 123
+}

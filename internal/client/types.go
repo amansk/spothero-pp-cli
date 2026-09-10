@@ -9,28 +9,28 @@ type Envelope struct {
 
 // APIError represents a SpotHero API error item.
 type APIError struct {
-	Code       string   `json:"code"`
-	Messages   []string `json:"messages"`
-	FieldName  string   `json:"field_name,omitempty"`
+	Code      string   `json:"code"`
+	Messages  []string `json:"messages"`
+	FieldName string   `json:"field_name,omitempty"`
 }
 
 // SearchParams holds normalized search parameters from GET /search-params/.
 type SearchParams struct {
-	Latitude      float64 `json:"latitude"`
-	Longitude     float64 `json:"longitude"`
-	Starts        string  `json:"starts"`
-	Ends          string  `json:"ends"`
-	StartsLocal   string  `json:"starts_local"`
-	EndsLocal     string  `json:"ends_local"`
-	Sort          string  `json:"sort"`
-	SortOrder     string  `json:"sort_order"`
-	DistanceLT    float64 `json:"distance_lt"`
-	DistanceGT    float64 `json:"distance_gt"`
-	Monthly       bool    `json:"monthly"`
-	Airport       bool    `json:"airport"`
-	SearchString          string  `json:"search_string"`
-	SearchURL             string  `json:"search_url"`
-	IdealSearchDistance   float64 `json:"ideal_search_distance"`
+	Latitude            float64 `json:"latitude"`
+	Longitude           float64 `json:"longitude"`
+	Starts              string  `json:"starts"`
+	Ends                string  `json:"ends"`
+	StartsLocal         string  `json:"starts_local"`
+	EndsLocal           string  `json:"ends_local"`
+	Sort                string  `json:"sort"`
+	SortOrder           string  `json:"sort_order"`
+	DistanceLT          float64 `json:"distance_lt"`
+	DistanceGT          float64 `json:"distance_gt"`
+	Monthly             bool    `json:"monthly"`
+	Airport             bool    `json:"airport"`
+	SearchString        string  `json:"search_string"`
+	SearchURL           string  `json:"search_url"`
+	IdealSearchDistance float64 `json:"ideal_search_distance"`
 	GooglePlaceID       string  `json:"-"`
 	CityID              int     `json:"-"`
 	CitySlug            string  `json:"city_slug,omitempty"`
@@ -67,6 +67,23 @@ type UserProfile struct {
 	LastName  string `json:"last_name"`
 }
 
+// UserAccount is GET /users/me/ (reservation-auth authoritative).
+type UserAccount struct {
+	ID             int    `json:"id"`
+	Email          string `json:"email"`
+	FirstName      string `json:"first_name,omitempty"`
+	LastName       string `json:"last_name,omitempty"`
+	DefaultCardID  int    `json:"default_card_id,omitempty"`
+}
+
+// VehicleProfile is a saved vehicle on the consumer account.
+type VehicleProfile struct {
+	ID                int    `json:"id"`
+	LicensePlate      string `json:"license_plate,omitempty"`
+	LicensePlateState string `json:"license_plate_state,omitempty"`
+	IsDefault         bool   `json:"is_default"`
+}
+
 // FacilityRateQuery is input for Craig GET /search/transient/{facilityId}.
 type FacilityRateQuery struct {
 	FacilityID int
@@ -83,51 +100,87 @@ type FacilityRateResult struct {
 	Title        string         `json:"title,omitempty"`
 }
 
-// RateQuote is a facility rate for a time window.
+// RateQuote is a facility rate for a time window with checkout quote binding fields.
 type RateQuote struct {
-	FacilityID int    `json:"facility_id"`
-	Starts     string `json:"starts"`
-	Ends       string `json:"ends"`
-	PriceCents int    `json:"price_cents"`
-	Price      string `json:"price"`
-	Available  bool   `json:"available"`
-	RateID     string `json:"rate_id"`
+	FacilityID           int    `json:"facility_id"`
+	Starts               string `json:"starts"`
+	Ends                 string `json:"ends"`
+	ContextStarts        string `json:"context_starts,omitempty"`
+	ContextEnds          string `json:"context_ends,omitempty"`
+	PriceCents           int    `json:"price_cents"`
+	Price                string `json:"price"`
+	Available            bool   `json:"available"`
+	RateID               string `json:"rate_id"`
+	QuoteToken           string `json:"quote_token,omitempty"`
+	QuoteMAC             string `json:"quote_mac,omitempty"`
+	LicensePlateRequired bool   `json:"license_plate_required,omitempty"`
 }
 
-// CheckoutRequest is POST /checkout/ body (verified required fields).
+// CheckoutRequest is POST /checkout/ body (consumer-checkout live shape).
 type CheckoutRequest struct {
-	Items    []CheckoutItem    `json:"items"`
-	Payment  CheckoutPayment   `json:"payment"`
-	Currency string            `json:"currency"`
-	Email    string            `json:"email"`
+	Items    []CheckoutItem  `json:"items"`
+	Payment  CheckoutPayment `json:"payment"`
+	Currency string          `json:"currency"`
+	Email    string          `json:"email"`
 }
 
 type CheckoutItem struct {
-	FacilityID int    `json:"facility_id"`
-	Starts     string `json:"starts"`
-	Ends       string `json:"ends"`
-	RateID     string `json:"rate_id,omitempty"`
+	ItemType     string             `json:"item_type"`
+	Price        int                `json:"price"`
+	RateID       string             `json:"rate_id"`
+	QuoteToken   string             `json:"quote_token"`
+	QuoteMAC     string             `json:"quote_mac"`
+	ItemContext  CheckoutItemContext `json:"item_context"`
+}
+
+type CheckoutItemContext struct {
+	Facility          int    `json:"facility"`
+	Starts            string `json:"starts"`
+	Ends              string `json:"ends"`
+	VehicleProfileID  int    `json:"vehicle_profile_id,omitempty"`
+	LicensePlateStr   string `json:"license_plate_str,omitempty"`
+	LicensePlateState string `json:"license_plate_state,omitempty"`
 }
 
 type CheckoutPayment struct {
-	MethodID string `json:"method_id,omitempty"`
-	Token    string `json:"token,omitempty"`
+	Cards []CheckoutCard `json:"cards"`
+}
+
+type CheckoutCard struct {
+	CardID int `json:"card_id"`
+}
+
+// BookPlaceInput configures checkout body assembly for book place.
+type BookPlaceInput struct {
+	FacilityID        int
+	Starts            string
+	Ends              string
+	CitySlug          string
+	Email             string
+	SelectRateID      string
+	VehicleProfileID  int
+	CardID            int
+	LicensePlateStr   string
+	LicensePlateState string
 }
 
 // BookPreview is local preview output before a live booking.
 type BookPreview struct {
-	FacilityID   int            `json:"facility_id"`
-	Title        string         `json:"title,omitempty"`
-	Starts       string         `json:"starts"`
-	Ends         string         `json:"ends"`
-	PeriodsUTC   []SearchPeriod `json:"periods_utc,omitempty"`
-	TimezoneNote string         `json:"timezone_note,omitempty"`
-	PriceCents   int            `json:"price_cents"`
-	Price        string         `json:"price"`
-	RateID       string         `json:"rate_id,omitempty"`
-	Email        string         `json:"email,omitempty"`
-	DryRun       bool           `json:"dry_run"`
-	Message      string         `json:"message"`
+	FacilityID           int            `json:"facility_id"`
+	Title                string         `json:"title,omitempty"`
+	Starts               string         `json:"starts"`
+	Ends                 string         `json:"ends"`
+	PeriodsUTC           []SearchPeriod `json:"periods_utc,omitempty"`
+	TimezoneNote         string         `json:"timezone_note,omitempty"`
+	PriceCents           int            `json:"price_cents"`
+	Price                string         `json:"price"`
+	RateID               string         `json:"rate_id,omitempty"`
+	QuoteToken           string         `json:"quote_token,omitempty"`
+	QuoteMAC             string         `json:"quote_mac,omitempty"`
+	LicensePlateRequired bool           `json:"license_plate_required,omitempty"`
+	Email                string         `json:"email,omitempty"`
+	DryRun               bool           `json:"dry_run"`
+	Message              string         `json:"message"`
 }
 
 // CancelPreview is local preview before cancellation.

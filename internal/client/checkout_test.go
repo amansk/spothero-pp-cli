@@ -1,0 +1,132 @@
+package client
+
+import (
+	_ "embed"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/amansk/spothero-pp-cli/internal/auth"
+)
+
+//go:embed testdata/checkout_request_live_shape.json
+var checkoutRequestFixture []byte
+
+//go:embed testdata/users_me_live_shape.json
+var usersMeFixture []byte
+
+//go:embed testdata/users_vehicles_live_shape.json
+var usersVehiclesFixture []byte
+
+//go:embed testdata/search_transient_facility_live_shape.json
+var facilityQuoteFixture []byte
+
+func envelopeData(data any) []byte {
+	b, _ := json.Marshal(Envelope{Data: data})
+	return b
+}
+
+func TestBuildCheckoutLiveShape(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/search/transient/6698":
+			_, _ = w.Write(facilityQuoteFixture)
+		case "/users/me/":
+			_, _ = w.Write(envelopeData(json.RawMessage(usersMeFixture)))
+		case "/users/42/vehicles/":
+			_, _ = w.Write(envelopeData(json.RawMessage(usersVehiclesFixture)))
+		default:
+			t.Fatalf("unexpected %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	c := New(&auth.Session{
+		Cookies: map[string]string{"sessionid": "abc", "csrftoken": "csrf"},
+	})
+	c.CraigBaseURL = srv.URL
+	c.BaseURL = srv.URL
+	c.HTTP = srv.Client()
+
+	req, _, err := c.BuildCheckout(BookPlaceInput{
+		FacilityID: 6698,
+		Starts:     "2026-09-15T09:00",
+		Ends:       "2026-09-15T17:00",
+		CitySlug:   "san-francisco",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := json.Marshal(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotMap, wantMap map[string]any
+	if err := json.Unmarshal(got, &gotMap); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(checkoutRequestFixture, &wantMap); err != nil {
+		t.Fatal(err)
+	}
+	if gotMap["currency"] != "usd" {
+		t.Fatalf("currency=%v", gotMap["currency"])
+	}
+	items, ok := gotMap["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("items=%v", gotMap["items"])
+	}
+	item := items[0].(map[string]any)
+	if item["rate_id"] != "113821" || item["quote_token"] != "REDACTED-QUOTE-TOKEN" || item["quote_mac"] != "113821" {
+		t.Fatalf("quote fields=%v", item)
+	}
+	ctx := item["item_context"].(map[string]any)
+	if ctx["facility"].(float64) != 6698 || ctx["vehicle_profile_id"].(float64) != 37062538 {
+		t.Fatalf("context=%v", ctx)
+	}
+	payment := gotMap["payment"].(map[string]any)
+	cards := payment["cards"].([]any)
+	if cards[0].(map[string]any)["card_id"].(float64) != 123 {
+		t.Fatalf("payment=%v", payment)
+	}
+}
+
+func TestCheckoutSetsCSRFAndVersion(t *testing.T) {
+	var gotCSRF, gotVersion string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/checkout/" {
+			t.Fatalf("path=%s", r.URL.Path)
+		}
+		gotCSRF = r.Header.Get("X-CSRFToken")
+		gotVersion = r.Header.Get("SpotHero-Version")
+		_, _ = w.Write(envelopeData(map[string]any{"reservation_id": 1}))
+	}))
+	t.Cleanup(srv.Close)
+	c := New(&auth.Session{Cookies: map[string]string{"csrftoken": "tok"}})
+	c.BaseURL = srv.URL
+	c.HTTP = srv.Client()
+	_, err := c.Checkout(CheckoutRequest{
+		Currency: "usd",
+		Email:    "a@b.com",
+		Payment:  CheckoutPayment{Cards: []CheckoutCard{{CardID: 1}}},
+		Items: []CheckoutItem{{
+			ItemType:   "rental",
+			Price:      100,
+			RateID:     "1",
+			QuoteToken: "qt",
+			QuoteMAC:   "1",
+			ItemContext: CheckoutItemContext{
+				Facility: 1,
+				Starts:   "2026-09-15T09:00:00-07:00",
+				Ends:     "2026-09-15T17:00:00-07:00",
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotCSRF != "tok" || gotVersion != ConsumerCheckoutVersion {
+		t.Fatalf("csrf=%q version=%q", gotCSRF, gotVersion)
+	}
+}

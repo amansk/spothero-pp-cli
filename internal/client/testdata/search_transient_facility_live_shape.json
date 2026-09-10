@@ -15,9 +15,20 @@
       {
         "quote": {
           "meta": {
-            "quote_mac": "REDACTED",
+            "quote_mac": "113821",
             "quote_token": "REDACTED-QUOTE-TOKEN"
           },
+          "order": [
+            {
+              "rate_id": "113821",
+              "starts": "2026-09-15T09:00:00-07:00",
+              "ends": "2026-09-15T17:00:00-07:00",
+              "total_price": {
+                "currency_code": "USD",
+                "value": 2968
+              }
+            }
+          ],
           "total_price": {
             "currency_code": "USD",
             "value": 2968
@@ -44,6 +55,9 @@
             "types": ["search"]
           }
         ]
+      },
+      "requirements": {
+        "license_plate": false
       }
     },
     "options": {

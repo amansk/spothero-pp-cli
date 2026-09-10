@@ -100,8 +100,11 @@ func TestParseCraigTransientFacilityFixture(t *testing.T) {
 	if rates[0].PriceCents != 2968 || rates[0].Price != "$29.68" {
 		t.Fatalf("price=%q cents=%d", rates[0].Price, rates[0].PriceCents)
 	}
-	if rates[0].RateID != "REDACTED-QUOTE-TOKEN" || !rates[0].Available {
+	if rates[0].RateID != "113821" || rates[0].QuoteToken != "REDACTED-QUOTE-TOKEN" || rates[0].QuoteMAC != "113821" || !rates[0].Available {
 		t.Fatalf("rate=%+v", rates[0])
+	}
+	if rates[0].ContextStarts != "2026-09-15T09:00:00-07:00" {
+		t.Fatalf("context starts=%q", rates[0].ContextStarts)
 	}
 	if title != "Example Facility 6698" {
 		t.Fatalf("title=%q", title)

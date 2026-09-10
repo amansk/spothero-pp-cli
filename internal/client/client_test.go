@@ -74,7 +74,15 @@ func TestCheckoutDryRun(t *testing.T) {
 		t.Fatal("should not hit network in dry-run")
 	})
 	c.DryRun = true
-	_, err := c.Checkout(client.CheckoutRequest{Currency: "USD", Email: "a@b.com"})
+	_, err := c.Checkout(client.CheckoutRequest{
+		Currency: "usd",
+		Email:    "a@b.com",
+		Payment:  client.CheckoutPayment{Cards: []client.CheckoutCard{{CardID: 1}}},
+		Items: []client.CheckoutItem{{
+			ItemType: "rental", Price: 100, RateID: "1", QuoteToken: "qt", QuoteMAC: "1",
+			ItemContext: client.CheckoutItemContext{Facility: 1, Starts: "2026-09-15T09:00:00-07:00", Ends: "2026-09-15T17:00:00-07:00"},
+		}},
+	})
 	if err == nil {
 		t.Fatal("expected dry-run error")
 	}

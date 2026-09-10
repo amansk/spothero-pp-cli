@@ -21,7 +21,11 @@ func newCancelCmd(opt *Options) *cobra.Command {
 			if !yes || confirm == "" {
 				return exitcode.Usagef("refusing cancel: run `cancel preview %s` first, then pass --yes --confirm <token>", args[0])
 			}
-			if err := consumeCancelToken(confirm, args[0]); err != nil {
+			home, err := opt.ResolveHome()
+			if err != nil {
+				return err
+			}
+			if err := consumeCancelToken(home, confirm, args[0]); err != nil {
 				return exitcode.Usagef("%v", err)
 			}
 			c, err := opt.newClient()
@@ -31,11 +35,11 @@ func newCancelCmd(opt *Options) *cobra.Command {
 			if opt.DryRun {
 				return writeOut(cmd, opt, map[string]any{
 					"dry_run":    true,
-					"would_post": client.PathReservationCancel,
+					"would_post": client.PathReservationRefund,
 					"id":         args[0],
 				})
 			}
-			out, err := c.CancelReservation(args[0])
+			out, err := c.RefundReservation(args[0])
 			if err != nil {
 				return err
 			}
@@ -54,6 +58,10 @@ func newCancelPreviewCmd(opt *Options) *cobra.Command {
 		Short: "Preview cancellation and obtain a confirm token",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			home, err := opt.ResolveHome()
+			if err != nil {
+				return err
+			}
 			c, err := opt.newClient()
 			if err != nil {
 				return err
@@ -62,7 +70,10 @@ func newCancelPreviewCmd(opt *Options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			token := issueCancelToken(args[0])
+			token, err := issueCancelToken(home, args[0])
+			if err != nil {
+				return err
+			}
 			preview := client.CancelPreview{
 				ReservationID: args[0],
 				Status:        res.Status,

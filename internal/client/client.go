@@ -29,7 +29,7 @@ func New(session *auth.Session) *Client {
 		BaseURL: DefaultBaseURL,
 		HTTP:    &http.Client{Timeout: 30 * time.Second},
 		Session: session,
-		UserAgent: "spothero-pp-cli/0.1.3 (+https://github.com/amansk/spothero-pp-cli)",
+		UserAgent: "spothero-pp-cli/0.1.4 (+https://github.com/amansk/spothero-pp-cli)",
 	}
 }
 
@@ -37,18 +37,56 @@ func (c *Client) url(path string) string {
 	return strings.TrimRight(c.BaseURL, "/") + path
 }
 
-func (c *Client) newRequest(method, path string, body io.Reader) (*http.Request, error) {
-	req, err := http.NewRequest(method, c.url(path), body)
+func (c *Client) newRequest(method, path string, body io.Reader) *requestOptions {
+	return &requestOptions{
+		client: c,
+		method: method,
+		path:   path,
+		body:   body,
+	}
+}
+
+type requestOptions struct {
+	client      *Client
+	method      string
+	path        string
+	body        io.Reader
+	referer     string
+	spotVersion string
+	mutating    bool
+}
+
+func (o *requestOptions) withCheckoutHeaders() *requestOptions {
+	o.referer = "https://spothero.com/checkout"
+	o.spotVersion = ConsumerCheckoutVersion
+	o.mutating = true
+	return o
+}
+
+func (o *requestOptions) build() (*http.Request, error) {
+	req, err := http.NewRequest(o.method, o.client.url(o.path), o.body)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", c.UserAgent)
+	req.Header.Set("User-Agent", o.client.UserAgent)
 	req.Header.Set("Origin", "https://spothero.com")
-	req.Header.Set("Referer", "https://spothero.com/search")
-	if c.Session != nil {
-		if ch := c.Session.CookieHeader(); ch != "" {
+	referer := o.referer
+	if referer == "" {
+		referer = "https://spothero.com/search"
+	}
+	req.Header.Set("Referer", referer)
+	if o.spotVersion != "" {
+		req.Header.Set("SpotHero-Version", o.spotVersion)
+	}
+	if o.client.Session != nil {
+		if ch := o.client.Session.CookieHeader(); ch != "" {
 			req.Header.Set("Cookie", ch)
+		}
+		if o.mutating {
+			if csrf := o.client.Session.CSRFToken(); csrf != "" {
+				req.Header.Set("X-CSRFToken", csrf)
+			}
 		}
 	}
 	return req, nil
@@ -66,7 +104,11 @@ func (c *Client) doJSON(method, path string, body any, out any) error {
 		}
 		rdr = bytes.NewReader(b)
 	}
-	req, err := c.newRequest(method, path, rdr)
+	opts := c.newRequest(method, path, rdr)
+	if method != http.MethodGet && method != http.MethodHead {
+		opts.mutating = true
+	}
+	req, err := opts.build()
 	if err != nil {
 		return err
 	}
@@ -117,7 +159,11 @@ func (c *Client) doJSONData(method, path string, body any) (json.RawMessage, err
 		}
 		rdr = bytes.NewReader(b)
 	}
-	req, err := c.newRequest(method, path, rdr)
+	opts := c.newRequest(method, path, rdr)
+	if method != http.MethodGet && method != http.MethodHead {
+		opts.mutating = true
+	}
+	req, err := opts.build()
 	if err != nil {
 		return nil, err
 	}
@@ -425,15 +471,59 @@ func (c *Client) GetReservation(id string) (Reservation, error) {
 }
 
 func (c *Client) Checkout(req CheckoutRequest) (map[string]any, error) {
-	var out map[string]any
-	if err := c.doJSON(http.MethodPost, PathCheckout, req, &out); err != nil {
+	if len(req.Items) == 0 {
+		return nil, exitcode.Usagef("checkout requires at least one item")
+	}
+	if err := validateCheckoutItem(req.Items[0]); err != nil {
+		return nil, exitcode.Usagef("invalid checkout item: %v", err)
+	}
+	if c.DryRun {
+		return nil, exitcode.Usagef("dry-run: would POST %s", PathCheckout)
+	}
+	var rdr io.Reader
+	b, err := json.Marshal(req)
+	if err != nil {
 		return nil, err
+	}
+	rdr = bytes.NewReader(b)
+	reqHTTP, err := c.newRequest(http.MethodPost, PathCheckout, rdr).withCheckoutHeaders().build()
+	if err != nil {
+		return nil, err
+	}
+	reqHTTP.Header.Set("Content-Type", "application/json")
+	resp, err := c.HTTP.Do(reqHTTP)
+	if err != nil {
+		return nil, exitcode.Transientf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return nil, exitcode.Transientf("rate limited (HTTP 429)")
+	}
+	var env Envelope
+	if err := json.Unmarshal(raw, &env); err != nil {
+		if resp.StatusCode >= 400 {
+			return nil, exitcode.APIf("HTTP %d: %s", resp.StatusCode, truncate(string(raw), 200))
+		}
+		return nil, exitcode.APIf("decode response: %v", err)
+	}
+	if err := checkEnvelope(resp.StatusCode, env); err != nil {
+		return nil, err
+	}
+	out := map[string]any{}
+	if env.Data != nil {
+		if m, ok := env.Data.(map[string]any); ok {
+			out = m
+		}
 	}
 	return out, nil
 }
 
-func (c *Client) CancelReservation(id string) (map[string]any, error) {
-	path := fmt.Sprintf(PathReservationCancel, url.PathEscape(id))
+func (c *Client) RefundReservation(id string) (map[string]any, error) {
+	path := fmt.Sprintf(PathReservationRefund, url.PathEscape(id))
 	var out map[string]any
 	if err := c.doJSON(http.MethodPost, path, nil, &out); err != nil {
 		return nil, err

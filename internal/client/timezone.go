@@ -11,22 +11,22 @@ import (
 // citySlugTimezones maps SpotHero city slugs to IANA zones for naive --starts/--ends.
 // Non-binding: fallback when input lacks a numeric offset. See PLAN.md.
 var citySlugTimezones = map[string]string{
-	"san-francisco":   "America/Los_Angeles",
-	"los-angeles":     "America/Los_Angeles",
-	"seattle":         "America/Los_Angeles",
-	"portland":        "America/Los_Angeles",
-	"chicago":         "America/Chicago",
-	"new-york":        "America/New_York",
-	"boston":          "America/New_York",
-	"washington-dc":   "America/New_York",
-	"philadelphia":    "America/New_York",
-	"denver":          "America/Denver",
-	"phoenix":         "America/Phoenix",
-	"dallas":          "America/Chicago",
-	"houston":         "America/Chicago",
-	"austin":          "America/Chicago",
-	"miami":           "America/New_York",
-	"atlanta":         "America/New_York",
+	"san-francisco": "America/Los_Angeles",
+	"los-angeles":   "America/Los_Angeles",
+	"seattle":       "America/Los_Angeles",
+	"portland":      "America/Los_Angeles",
+	"chicago":       "America/Chicago",
+	"new-york":      "America/New_York",
+	"boston":        "America/New_York",
+	"washington-dc": "America/New_York",
+	"philadelphia":  "America/New_York",
+	"denver":        "America/Denver",
+	"phoenix":       "America/Phoenix",
+	"dallas":        "America/Chicago",
+	"houston":       "America/Chicago",
+	"austin":        "America/Chicago",
+	"miami":         "America/New_York",
+	"atlanta":       "America/New_York",
 }
 
 // SearchPeriod is a UTC window sent to Craig bulk transient search.
@@ -87,4 +87,34 @@ func parseSearchInstantUTC(raw string, params SearchParams) (time.Time, *time.Lo
 		}
 	}
 	return time.Time{}, nil, fmt.Errorf("unrecognized time %q (use RFC3339 or local time with city from search-params)", raw)
+}
+
+// formatCheckoutInstant returns RFC3339 with numeric offset for checkout item_context.
+func formatCheckoutInstant(raw string, params SearchParams) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("empty time")
+	}
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t.Format(time.RFC3339), nil
+	}
+	if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+		return t.Format(time.RFC3339), nil
+	}
+	loc, err := locationForSearch(params)
+	if err != nil {
+		return "", err
+	}
+	layouts := []string{
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04",
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04",
+	}
+	for _, layout := range layouts {
+		if t, err := time.ParseInLocation(layout, raw, loc); err == nil {
+			return t.Format(time.RFC3339), nil
+		}
+	}
+	return "", fmt.Errorf("unrecognized time %q", raw)
 }

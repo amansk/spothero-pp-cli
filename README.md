@@ -66,18 +66,27 @@ spothero-pp-cli book preview --facility-id 12345 \
 
 Uses Craig `GET /v2/search/transient/{facilityId}` (no charge). Pass `--city-slug` from search output for naive local datetimes.
 
-Live booking requires **all three** gates (exact confirm string):
+Live booking requires **all three** gates (exact confirm string). The CLI refreshes the Craig quote, resolves email/default card/vehicle from `/users/me/` and `/users/{id}/vehicles/`, and POSTs the consumer-checkout body to `/checkout/` (nested `item_context`, `quote_token`/`quote_mac`, `payment.cards`, currency `usd`).
 
 ```bash
 spothero-pp-cli book place --facility-id 12345 \
   --starts 2026-09-11T09:30 --ends 2026-09-11T12:30 \
+  --city-slug chicago \
   --enable-live-booking --owner-approved \
   --confirm "PLACE SPOTHERO BOOKING" --json
 ```
 
-Use `--dry-run` to validate the checkout payload without posting.
+Inspect the checkout payload without posting:
+
+```bash
+spothero-pp-cli book place ... --dry-run --json
+```
+
+Overrides: `--card-id`, `--vehicle-profile-id`, `--license-plate`, `--license-plate-state`, `--email`.
 
 ## Cancellation (token-gated)
+
+Confirm tokens are stored under your config dir (`confirm-tokens.json`) so preview and confirm can run in separate processes.
 
 ```bash
 spothero-pp-cli cancel preview <reservation-id> --json
@@ -85,6 +94,8 @@ spothero-pp-cli cancel preview <reservation-id> --json
 
 spothero-pp-cli cancel <reservation-id> --yes --confirm <token> --json
 ```
+
+Cancel/refund uses `POST /reservations/{id}/refund/` (not `/cancellation/`).
 
 ## Global flags
 

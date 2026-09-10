@@ -13,12 +13,17 @@ const (
 	// PathFacilityRates is legacy ratesSearch on spothero.com (404/dead); book preview uses Craig instead.
 	PathFacilityRates = "/facilities/%d/rates/"
 	PathUser          = "/user/"
+	PathUsersMe       = "/users/me/"
+	PathUserVehicles  = "/users/%d/vehicles/"
 	PathReservations  = "/reservations/"
 	PathReservation   = "/reservations/%s/"
 	PathCheckout      = "/checkout/"
-	// PathReservationCancel is inferred from web-app behavior; live shape may differ.
-	PathReservationCancel = "/reservations/%s/cancellation/"
+	// PathReservationRefund is live consumer cancel/refund (POST empty body).
+	PathReservationRefund = "/reservations/%s/refund/"
 )
+
+// ConsumerCheckoutVersion is SpotHero-Version on checkout mutating requests (live HAR).
+const ConsumerCheckoutVersion = "2025-04-28"
 
 // Craig consumer search paths (live confirmed Sep 2026 HAR).
 const (

@@ -23,6 +23,10 @@ func mockHTTP(t *testing.T) *client.Client {
 			_, _ = w.Write([]byte(`{"results":[{"distance":{"walking_meters":50},"rates":[{"quote":{"total_price":{"value":500}}}],"availability":{"available":true},"facility":{"common":{"id":"1","title":"Lot","status":"on_sales_allowed","addresses":[{"street_address":"1 Main","city":"Chicago","state":"IL","postal_code":"60601","types":["search"]}]}}}]}`))
 		case "/user/":
 			_, _ = w.Write([]byte(`{"data":{"id":1,"email":"user@example.com"}}`))
+		case "/users/me/":
+			_, _ = w.Write([]byte(`{"data":{"id":42,"email":"user@example.com","default_card_id":123}}`))
+		case "/users/42/vehicles/":
+			_, _ = w.Write([]byte(`{"data":{"results":[{"id":37062538,"license_plate":"9XCV666","license_plate_state":"CA","is_default":true}]}}`))
 		case "/reservations/":
 			_, _ = w.Write([]byte(`{"data":{"results":[{"rental_id":132887395,"display_id":"132887395","status":"success","price":1908,"is_cancellable":true,"starts":"2026-09-11T09:30","facility":{"title":"Lot"}}]}}`))
 		case "/reservations/132887395/":
@@ -30,24 +34,25 @@ func mockHTTP(t *testing.T) *client.Client {
 		case "/reservations/r1/":
 			_, _ = w.Write([]byte(`{"data":{"rental_id":1,"display_id":"r1","status":"upcoming","is_cancellable":true}}`))
 		case "/search/transient/6698":
-			_, _ = w.Write([]byte(`{"result":{"availability":{"available":true},"rates":[{"quote":{"meta":{"quote_token":"tok-1"},"total_price":{"value":2968}}}],"facility":{"common":{"id":"6698","title":"Lot 6698","status":"on_sales_allowed"}}}}`))
+			_, _ = w.Write([]byte(`{"result":{"availability":{"available":true},"rates":[{"quote":{"meta":{"quote_token":"tok-1","quote_mac":"113821"},"order":[{"rate_id":"113821","starts":"2026-09-15T09:00:00-07:00","ends":"2026-09-15T17:00:00-07:00","total_price":{"value":2968}}],"total_price":{"value":2968}}}],"facility":{"common":{"id":"6698","title":"Lot 6698","status":"on_sales_allowed"}}}}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
 	t.Cleanup(srv.Close)
-	c := client.New(&auth.Session{RawCookieHeader: "s=1"})
+	c := client.New(&auth.Session{RawCookieHeader: "s=1; csrftoken=csrf"})
 	c.BaseURL = srv.URL
 	c.CraigBaseURL = srv.URL
 	c.HTTP = srv.Client()
 	return c
 }
 
-func runCLI(t *testing.T, args ...string) (int, string, string) {
+func runCLIWithHome(t *testing.T, home string, args ...string) (int, string, string) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
 	root := cli.NewRootForTest(&cli.Options{
 		HTTP: mockHTTP(t),
+		Home: home,
 	})
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)
@@ -57,6 +62,10 @@ func runCLI(t *testing.T, args ...string) (int, string, string) {
 		code = cli.ExitCodeForTest(err)
 	}
 	return code, stdout.String(), stderr.String()
+}
+
+func runCLI(t *testing.T, args ...string) (int, string, string) {
+	return runCLIWithHome(t, t.TempDir(), args...)
 }
 
 func TestVersion(t *testing.T) {
@@ -92,16 +101,55 @@ func TestBookPreviewJSON(t *testing.T) {
 		Title      string `json:"title"`
 		PriceCents int    `json:"price_cents"`
 		RateID     string `json:"rate_id"`
+		QuoteToken string `json:"quote_token"`
 		DryRun     bool   `json:"dry_run"`
 	}
 	if err := json.Unmarshal([]byte(out), &preview); err != nil {
 		t.Fatal(err)
 	}
-	if preview.FacilityID != 6698 || preview.PriceCents != 2968 || preview.RateID != "tok-1" || !preview.DryRun {
+	if preview.FacilityID != 6698 || preview.PriceCents != 2968 || preview.RateID != "113821" || preview.QuoteToken != "tok-1" || !preview.DryRun {
 		t.Fatalf("%+v", preview)
 	}
 	if preview.Title != "Lot 6698" {
 		t.Fatalf("title=%q", preview.Title)
+	}
+}
+
+func TestBookPlaceDryRunCheckoutBody(t *testing.T) {
+	code, out, errOut := runCLI(t, "--json", "--dry-run", "book", "place",
+		"--facility-id", "6698",
+		"--starts", "2026-09-15T09:00",
+		"--ends", "2026-09-15T17:00",
+		"--city-slug", "san-francisco",
+		"--enable-live-booking", "--owner-approved",
+		"--confirm", "PLACE SPOTHERO BOOKING",
+	)
+	if code != 0 {
+		t.Fatalf("code=%d err=%q out=%q", code, errOut, out)
+	}
+	var payload struct {
+		DryRun  bool                   `json:"dry_run"`
+		Request map[string]any         `json:"request"`
+	}
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if !payload.DryRun || payload.Request["currency"] != "usd" {
+		t.Fatalf("%+v", payload)
+	}
+	items := payload.Request["items"].([]any)
+	item := items[0].(map[string]any)
+	if item["rate_id"] != "113821" || item["quote_token"] != "tok-1" || item["quote_mac"] != "113821" {
+		t.Fatalf("item=%v", item)
+	}
+	ctx := item["item_context"].(map[string]any)
+	if ctx["facility"].(float64) != 6698 || ctx["vehicle_profile_id"].(float64) != 37062538 {
+		t.Fatalf("context=%v", ctx)
+	}
+	payment := payload.Request["payment"].(map[string]any)
+	cards := payment["cards"].([]any)
+	if cards[0].(map[string]any)["card_id"].(float64) != 123 {
+		t.Fatalf("payment=%v", payment)
 	}
 }
 
@@ -124,6 +172,28 @@ func TestCancelRequiresToken(t *testing.T) {
 	code, _, _ := runCLI(t, "cancel", "132887395")
 	if code != 2 {
 		t.Fatalf("code=%d", code)
+	}
+}
+
+func TestCancelPreviewConfirmAcrossProcesses(t *testing.T) {
+	home := t.TempDir()
+	code, out, errOut := runCLIWithHome(t, home, "--json", "cancel", "preview", "132887395")
+	if code != 0 {
+		t.Fatalf("preview code=%d err=%q out=%q", code, errOut, out)
+	}
+	var preview struct {
+		ConfirmToken string `json:"confirm_token"`
+	}
+	if err := json.Unmarshal([]byte(out), &preview); err != nil {
+		t.Fatal(err)
+	}
+	code, _, errOut = runCLIWithHome(t, home, "--json", "--dry-run", "cancel", "132887395", "--yes", "--confirm", preview.ConfirmToken)
+	if code != 0 {
+		t.Fatalf("cancel code=%d err=%q", code, errOut)
+	}
+	code, _, _ = runCLIWithHome(t, home, "--json", "--dry-run", "cancel", "132887395", "--yes", "--confirm", preview.ConfirmToken)
+	if code != 2 {
+		t.Fatalf("expected single-use token failure, code=%d", code)
 	}
 }
 

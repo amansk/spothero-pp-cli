@@ -52,26 +52,18 @@ func newBookPreviewCmd(opt *Options) *cobra.Command {
 				DryRun:       true,
 				Message:      "Preview only — no charge. Use book place with all safety gates to commit.",
 			}
-			if email == "" {
-				if user, uerr := c.GetUser(); uerr == nil {
-					preview.Email = user.Email
-				}
-			} else {
-				preview.Email = email
-			}
+			preview.Email, _ = c.ResolveEmail(email)
 			if len(quote.Rates) > 0 {
 				chosen := quote.Rates[0]
 				if rateID != "" {
 					for _, r := range quote.Rates {
-						if r.RateID == rateID {
+						if r.RateID == rateID || r.QuoteToken == rateID {
 							chosen = r
 							break
 						}
 					}
 				}
-				preview.RateID = chosen.RateID
-				preview.PriceCents = chosen.PriceCents
-				preview.Price = chosen.Price
+				client.ApplyBookPreviewFromRate(&preview, chosen)
 			}
 			return writeOut(cmd, opt, preview)
 		},
@@ -80,7 +72,7 @@ func newBookPreviewCmd(opt *Options) *cobra.Command {
 	cmd.Flags().StringVar(&starts, "starts", "", "Parking start datetime")
 	cmd.Flags().StringVar(&ends, "ends", "", "Parking end datetime")
 	cmd.Flags().StringVar(&citySlug, "city-slug", "", "Search city slug for naive datetime TZ (from search params.city_slug)")
-	cmd.Flags().StringVar(&rateID, "rate-id", "", "Optional specific rate/quote token")
+	cmd.Flags().StringVar(&rateID, "rate-id", "", "Optional specific rate id or quote token")
 	cmd.Flags().StringVar(&email, "email", "", "Receipt email override")
 	return cmd
 }
@@ -88,6 +80,8 @@ func newBookPreviewCmd(opt *Options) *cobra.Command {
 func newBookPlaceCmd(opt *Options) *cobra.Command {
 	var facilityID int
 	var starts, ends, rateID, email, citySlug string
+	var vehicleProfileID, cardID int
+	var licensePlate, licensePlateState string
 	var enableLive, ownerApproved bool
 	var confirm string
 	cmd := &cobra.Command{
@@ -107,44 +101,26 @@ func newBookPlaceCmd(opt *Options) *cobra.Command {
 			if c.Session == nil || c.Session.CookieHeader() == "" {
 				return exitcode.Authf("authenticated session required; run auth login")
 			}
-			if rateID == "" {
-				quote, err := c.GetFacilityRates(client.FacilityRateQuery{
-					FacilityID: facilityID,
-					Starts:     starts,
-					Ends:       ends,
-					CitySlug:   citySlug,
-				})
-				if err != nil {
-					return err
-				}
-				if len(quote.Rates) == 0 {
-					return exitcode.NotFoundf("no rates for facility %d", facilityID)
-				}
-				rateID = quote.Rates[0].RateID
-			}
-			if email == "" {
-				user, err := c.GetUser()
-				if err != nil {
-					return exitcode.Usagef("--email required when user profile unavailable: %v", err)
-				}
-				email = user.Email
-			}
-			req := client.CheckoutRequest{
-				Items: []client.CheckoutItem{{
-					FacilityID: facilityID,
-					Starts:     starts,
-					Ends:       ends,
-					RateID:     rateID,
-				}},
-				Payment:  client.CheckoutPayment{},
-				Currency: "USD",
-				Email:    email,
+			req, _, err := c.BuildCheckout(client.BookPlaceInput{
+				FacilityID:        facilityID,
+				Starts:            starts,
+				Ends:              ends,
+				CitySlug:          citySlug,
+				Email:             email,
+				SelectRateID:      rateID,
+				VehicleProfileID:  vehicleProfileID,
+				CardID:            cardID,
+				LicensePlateStr:   licensePlate,
+				LicensePlateState: licensePlateState,
+			})
+			if err != nil {
+				return err
 			}
 			if opt.DryRun {
 				return writeOut(cmd, opt, map[string]any{
-					"dry_run": true,
+					"dry_run":    true,
 					"would_post": client.PathCheckout,
-					"request": req,
+					"request":    req,
 				})
 			}
 			out, err := c.Checkout(req)
@@ -158,8 +134,12 @@ func newBookPlaceCmd(opt *Options) *cobra.Command {
 	cmd.Flags().StringVar(&starts, "starts", "", "Parking start datetime")
 	cmd.Flags().StringVar(&ends, "ends", "", "Parking end datetime")
 	cmd.Flags().StringVar(&citySlug, "city-slug", "", "Search city slug for naive datetime TZ")
-	cmd.Flags().StringVar(&rateID, "rate-id", "", "Rate/quote token from book preview")
+	cmd.Flags().StringVar(&rateID, "rate-id", "", "Rate id or quote token from book preview")
 	cmd.Flags().StringVar(&email, "email", "", "Receipt email")
+	cmd.Flags().IntVar(&vehicleProfileID, "vehicle-profile-id", 0, "Saved vehicle profile id for item_context")
+	cmd.Flags().IntVar(&cardID, "card-id", 0, "Saved payment card id")
+	cmd.Flags().StringVar(&licensePlate, "license-plate", "", "Ad-hoc license plate when required")
+	cmd.Flags().StringVar(&licensePlateState, "license-plate-state", "", "Ad-hoc license plate state when required")
 	cmd.Flags().BoolVar(&enableLive, "enable-live-booking", false, "Explicit opt-in to charge a payment method")
 	cmd.Flags().BoolVar(&ownerApproved, "owner-approved", false, "Explicit owner approval for this booking")
 	cmd.Flags().StringVar(&confirm, "confirm", "", "Must be exactly: "+bookConfirmPhrase)
