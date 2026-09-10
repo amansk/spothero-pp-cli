@@ -2,6 +2,7 @@ package client
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/amansk/spothero-pp-cli/internal/exitcode"
 )
@@ -37,7 +38,7 @@ func (c *Client) BuildCheckout(in BookPlaceInput) (CheckoutRequest, RateQuote, e
 		}
 	}
 	if !chosen.Available {
-		return CheckoutRequest{}, RateQuote{}, exitcode.NotFoundf("facility %d not available for selected window", in.FacilityID)
+		return CheckoutRequest{}, RateQuote{}, exitcode.NotFoundf("%s", formatFacilityUnavailable(chosen.UnavailableReasons, in.FacilityID))
 	}
 
 	me, err := c.GetMe()
@@ -137,6 +138,14 @@ func (c *Client) BuildCheckout(in BookPlaceInput) (CheckoutRequest, RateQuote, e
 	return req, chosen, nil
 }
 
+// formatFacilityUnavailable builds a user-facing unavailability message from Craig reasons.
+func formatFacilityUnavailable(reasons []string, facilityID int) string {
+	if len(reasons) > 0 {
+		return "facility not available: " + strings.Join(reasons, ", ")
+	}
+	return fmt.Sprintf("facility %d not available for selected window", facilityID)
+}
+
 // ApplyBookPreviewFromRate copies quote fields into preview output.
 func ApplyBookPreviewFromRate(p *BookPreview, rate RateQuote) {
 	p.RateID = rate.RateID
@@ -144,6 +153,8 @@ func ApplyBookPreviewFromRate(p *BookPreview, rate RateQuote) {
 	p.QuoteMAC = rate.QuoteMAC
 	p.PriceCents = rate.PriceCents
 	p.Price = rate.Price
+	p.Available = rate.Available
+	p.UnavailableReasons = append([]string(nil), rate.UnavailableReasons...)
 	p.LicensePlateRequired = rate.LicensePlateRequired
 }
 

@@ -221,7 +221,8 @@ func parseCraigSearchResult(raw json.RawMessage) (SearchSpot, error) {
 		} `json:"distance"`
 		AveragePrice moneyWire `json:"average_price"`
 		Availability struct {
-			Available bool `json:"available"`
+			Available          bool     `json:"available"`
+			UnavailableReasons []string `json:"unavailable_reasons"`
 		} `json:"availability"`
 		Rates     []rateQuoteWire `json:"rates"`
 		BulkRates []struct {
@@ -246,24 +247,35 @@ func parseCraigSearchResult(raw json.RawMessage) (SearchSpot, error) {
 	if walkM == 0 && wire.Distance.LinearMeters > 0 {
 		walkM = int(wire.Distance.LinearMeters)
 	}
-	available := wire.Availability.Available
-	if !available && wire.Facility.Common.Status == "on_sales_allowed" && len(wire.Rates) > 0 {
-		available = true
-	}
-	if wire.Facility.Common.Status != "" && wire.Facility.Common.Status != "on_sales_allowed" {
-		available = false
-	}
+	available := resolveCraigAvailability(
+		wire.Availability.Available,
+		wire.Facility.Common.Status,
+		wire.Availability.UnavailableReasons,
+	)
 	return SearchSpot{
-		FacilityID:     id,
-		Title:          wire.Facility.Common.Title,
-		Slug:           wire.Facility.Common.Slug,
-		Address:        formatFacilityAddress(wire.Facility.Common.Addresses),
-		DistanceMeters: walkM,
-		PriceCents:     priceCents,
-		Price:          formatUSD(priceCents),
-		Available:      available,
-		Status:         wire.Facility.Common.Status,
+		FacilityID:         id,
+		Title:              wire.Facility.Common.Title,
+		Slug:               wire.Facility.Common.Slug,
+		Address:            formatFacilityAddress(wire.Facility.Common.Addresses),
+		DistanceMeters:     walkM,
+		PriceCents:         priceCents,
+		Price:              formatUSD(priceCents),
+		Available:          available,
+		Status:             wire.Facility.Common.Status,
+		UnavailableReasons: append([]string(nil), wire.Availability.UnavailableReasons...),
 	}, nil
+}
+
+// resolveCraigAvailability maps Craig availability without overriding explicit unavailability
+// (e.g. Outside Hours with priced rates but no quote_token).
+func resolveCraigAvailability(wireAvailable bool, status string, reasons []string) bool {
+	if !wireAvailable || len(reasons) > 0 {
+		return false
+	}
+	if status != "" && status != "on_sales_allowed" {
+		return false
+	}
+	return true
 }
 
 func pickPriceCents(avg moneyWire, rates []rateQuoteWire, bulk []struct {
@@ -344,7 +356,8 @@ func (c *Client) searchTransientFacilityGET(facilityID int, startsUTC, endsUTC s
 func parseCraigFacilityRates(raw json.RawMessage, facilityID int, starts, ends string) ([]RateQuote, string, error) {
 	var wire struct {
 		Availability struct {
-			Available bool `json:"available"`
+			Available          bool     `json:"available"`
+			UnavailableReasons []string `json:"unavailable_reasons"`
 		} `json:"availability"`
 		Rates    []rateQuoteWire `json:"rates"`
 		Facility struct {
@@ -363,13 +376,12 @@ func parseCraigFacilityRates(raw json.RawMessage, facilityID int, starts, ends s
 	if err := json.Unmarshal(raw, &wire); err != nil {
 		return nil, "", fmt.Errorf("craig facility result: %w", err)
 	}
-	available := wire.Availability.Available
-	if !available && wire.Facility.Common.Status == "on_sales_allowed" && len(wire.Rates) > 0 {
-		available = true
-	}
-	if wire.Facility.Common.Status != "" && wire.Facility.Common.Status != "on_sales_allowed" {
-		available = false
-	}
+	facilityAvailable := resolveCraigAvailability(
+		wire.Availability.Available,
+		wire.Facility.Common.Status,
+		wire.Availability.UnavailableReasons,
+	)
+	reasons := append([]string(nil), wire.Availability.UnavailableReasons...)
 	licenseRequired := wire.Requirements.LicensePlate || wire.Facility.Requirements.LicensePlate
 	out := make([]RateQuote, 0, len(wire.Rates))
 	for _, rate := range wire.Rates {
@@ -396,6 +408,7 @@ func parseCraigFacilityRates(raw json.RawMessage, facilityID int, starts, ends s
 		if quoteMAC == "" {
 			quoteMAC = rateID
 		}
+		rateAvailable := facilityAvailable && quoteToken != ""
 		out = append(out, RateQuote{
 			FacilityID:           facilityID,
 			Starts:               starts,
@@ -404,7 +417,8 @@ func parseCraigFacilityRates(raw json.RawMessage, facilityID int, starts, ends s
 			ContextEnds:          contextEnds,
 			PriceCents:           cents,
 			Price:                formatUSD(cents),
-			Available:            available,
+			Available:            rateAvailable,
+			UnavailableReasons:   reasons,
 			RateID:               rateID,
 			QuoteToken:           quoteToken,
 			QuoteMAC:             quoteMAC,

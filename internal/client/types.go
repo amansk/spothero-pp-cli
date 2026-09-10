@@ -45,8 +45,9 @@ type SearchSpot struct {
 	DistanceMeters int    `json:"distance_meters"`
 	PriceCents     int    `json:"price_cents"`
 	Price          string `json:"price"`
-	Available      bool   `json:"available"`
-	Status         string `json:"status,omitempty"`
+	Available          bool     `json:"available"`
+	Status             string   `json:"status,omitempty"`
+	UnavailableReasons []string `json:"unavailable_reasons,omitempty"`
 }
 
 // SearchResult combines geocode params and Craig inventory results.
@@ -127,11 +128,12 @@ type RateQuote struct {
 	ContextEnds          string `json:"context_ends,omitempty"`
 	PriceCents           int    `json:"price_cents"`
 	Price                string `json:"price"`
-	Available            bool   `json:"available"`
-	RateID               string `json:"rate_id"`
-	QuoteToken           string `json:"quote_token,omitempty"`
-	QuoteMAC             string `json:"quote_mac,omitempty"`
-	LicensePlateRequired bool   `json:"license_plate_required,omitempty"`
+	Available            bool     `json:"available"`
+	UnavailableReasons   []string `json:"unavailable_reasons,omitempty"`
+	RateID               string   `json:"rate_id"`
+	QuoteToken           string   `json:"quote_token,omitempty"`
+	QuoteMAC             string   `json:"quote_mac,omitempty"`
+	LicensePlateRequired bool     `json:"license_plate_required,omitempty"`
 }
 
 // CheckoutRequest is POST /checkout/ body (consumer-checkout live shape).
@@ -202,6 +204,8 @@ type BookPreview struct {
 	TimezoneNote         string         `json:"timezone_note,omitempty"`
 	PriceCents           int            `json:"price_cents"`
 	Price                string         `json:"price"`
+	Available            bool           `json:"available"`
+	UnavailableReasons   []string       `json:"unavailable_reasons,omitempty"`
 	RateID               string         `json:"rate_id,omitempty"`
 	QuoteToken           string         `json:"quote_token,omitempty"`
 	QuoteMAC             string         `json:"quote_mac,omitempty"`

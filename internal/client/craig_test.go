@@ -15,6 +15,9 @@ var craigTransientFixture []byte
 //go:embed testdata/search_transient_facility_live_shape.json
 var craigTransientFacilityFixture []byte
 
+//go:embed testdata/search_transient_facility_outside_hours_shape.json
+var craigTransientFacilityOutsideHoursFixture []byte
+
 func TestParseCraigTransientFixture(t *testing.T) {
 	var resp craigSearchResponse
 	if err := json.Unmarshal(craigTransientFixture, &resp); err != nil {
@@ -107,6 +110,36 @@ func TestParseCraigTransientFacilityFixture(t *testing.T) {
 		t.Fatalf("context starts=%q", rates[0].ContextStarts)
 	}
 	if title != "Example Facility 6698" {
+		t.Fatalf("title=%q", title)
+	}
+}
+
+func TestParseCraigTransientFacilityOutsideHoursFixture(t *testing.T) {
+	var resp craigFacilityResponse
+	if err := json.Unmarshal(craigTransientFacilityOutsideHoursFixture, &resp); err != nil {
+		t.Fatal(err)
+	}
+	rates, title, err := parseCraigFacilityRates(resp.Result, 144293, "2026-09-14T09:00", "2026-09-14T17:00")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rates) != 1 {
+		t.Fatalf("len=%d", len(rates))
+	}
+	r := rates[0]
+	if r.Available {
+		t.Fatalf("expected unavailable, got %+v", r)
+	}
+	if r.QuoteToken != "" {
+		t.Fatalf("quote_token=%q", r.QuoteToken)
+	}
+	if len(r.UnavailableReasons) != 1 || r.UnavailableReasons[0] != "Outside Hours" {
+		t.Fatalf("reasons=%v", r.UnavailableReasons)
+	}
+	if r.PriceCents != 1500 || r.RateID != "144293" {
+		t.Fatalf("rate=%+v", r)
+	}
+	if title != "Foundry 144293" {
 		t.Fatalf("title=%q", title)
 	}
 }

@@ -29,7 +29,7 @@ func New(session *auth.Session) *Client {
 		BaseURL: DefaultBaseURL,
 		HTTP:    &http.Client{Timeout: 30 * time.Second},
 		Session: session,
-		UserAgent: "spothero-pp-cli/0.1.7 (+https://github.com/amansk/spothero-pp-cli)",
+		UserAgent: "spothero-pp-cli/0.1.8 (+https://github.com/amansk/spothero-pp-cli)",
 	}
 }
 
