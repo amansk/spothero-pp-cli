@@ -3,13 +3,5 @@
   "email": "user@example.com",
   "phone_number": "+14155550100",
   "first_name": "Test",
-  "last_name": "User",
-  "default_card_id": 46111484,
-  "credit_cards": [
-    {
-      "card_id": 46111484,
-      "card_external_id": "REDACTED-CARD-UUID",
-      "is_default": true
-    }
-  ]
+  "last_name": "User"
 }

@@ -71,6 +71,7 @@ type UserProfile struct {
 type CreditCard struct {
 	CardID         int    `json:"card_id,omitempty"`
 	CardExternalID string `json:"card_external_id,omitempty"`
+	CardLast4      string `json:"card_last4,omitempty"`
 	IsDefault      bool   `json:"is_default"`
 }
 

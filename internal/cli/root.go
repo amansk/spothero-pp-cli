@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "0.1.6"
+var version = "0.1.7"
 
 // Options are global CLI flags.
 type Options struct {
@@ -82,6 +82,7 @@ func newRoot(opt *Options) *cobra.Command {
 	cmd.PersistentFlags().StringVar(&opt.Home, "home", "", "Override config dir ($SPOTHERO_PP_HOME or ~/.config/spothero-pp-cli)")
 
 	cmd.AddCommand(newAuthCmd(opt))
+	cmd.AddCommand(newAccountCmd(opt))
 	cmd.AddCommand(newDoctorCmd(opt))
 	cmd.AddCommand(newSearchCmd(opt))
 	cmd.AddCommand(newReservationsCmd(opt))

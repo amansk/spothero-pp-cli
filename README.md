@@ -33,7 +33,10 @@ spothero-pp-cli auth login --chrome
 ```bash
 spothero-pp-cli doctor --json
 spothero-pp-cli auth status
+spothero-pp-cli account cards --json
 ```
+
+Saved cards come from `GET /users/{id}/credit-cards/` (live `/users/me/` does not embed them). Output is last4 + ids only — never full PAN or session secrets.
 
 4. Search (address **or** lat/lng). Uses `GET api.spothero.com/v2/search/transient` (live HAR path), not dead `/api/v1/facilities/`:
 
@@ -66,7 +69,7 @@ spothero-pp-cli book preview --facility-id 12345 \
 
 Uses Craig `GET /v2/search/transient/{facilityId}` (no charge). Pass `--city-slug` from search output for naive local datetimes.
 
-Live booking requires **all three** gates (exact confirm string). The CLI refreshes the Craig quote, resolves email/phone/default card/vehicle from `/users/me/` and `/users/{id}/vehicles/`, and POSTs the consumer-checkout body to `/checkout/` (nested `payment.cards[{ card_external_id }]`, `total_price`, `item_context` with `phone_number`/`quote_token`/`rental_source_title`, currency `usd`).
+Live booking requires **all three** gates (exact confirm string). The CLI refreshes the Craig quote, resolves email/phone from `/users/me/`, default card from `/users/{id}/credit-cards/` when needed, vehicle from `/users/{id}/vehicles/`, and POSTs the consumer-checkout body to `/checkout/` (nested `payment.cards[{ card_external_id }]`, `total_price`, `item_context` with `phone_number`/`quote_token`/`rental_source_title`, currency `usd`).
 
 ```bash
 spothero-pp-cli book place --facility-id 12345 \

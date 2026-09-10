@@ -24,7 +24,9 @@ func mockHTTP(t *testing.T) *client.Client {
 		case "/user/":
 			_, _ = w.Write([]byte(`{"data":{"id":1,"email":"user@example.com"}}`))
 		case "/users/me/":
-			_, _ = w.Write([]byte(`{"data":{"id":42,"email":"user@example.com","phone_number":"+14155550100","default_card_id":46111484,"credit_cards":[{"card_id":46111484,"card_external_id":"REDACTED-CARD-UUID","is_default":true}]}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":42,"email":"user@example.com","phone_number":"+14155550100","first_name":"Test","last_name":"User"}}`))
+		case "/users/42/credit-cards/":
+			_, _ = w.Write([]byte(`{"data":{"results":[{"card_id":46111484,"card_external_id":"00000000-0000-4000-8000-000000000001","card_last4":"4242","is_default":true}]}}`))
 		case "/users/42/vehicles/":
 			_, _ = w.Write([]byte(`{"data":{"results":[{"id":37062538,"license_plate":"9XCV666","license_plate_state":"CA","is_default":true}]}}`))
 		case "/reservations/":
@@ -161,8 +163,35 @@ func TestBookPlaceDryRunCheckoutBody(t *testing.T) {
 		t.Fatalf("use_spothero_credit=%v", payment["use_spothero_credit"])
 	}
 	cards := payment["cards"].([]any)
-	if cards[0].(map[string]any)["card_external_id"] != "REDACTED-CARD-UUID" {
+	if cards[0].(map[string]any)["card_external_id"] != "00000000-0000-4000-8000-000000000001" {
 		t.Fatalf("cards=%v", payment["cards"])
+	}
+}
+
+func TestAccountCardsJSON(t *testing.T) {
+	code, out, errOut := runCLI(t, "--json", "account", "cards")
+	if code != 0 {
+		t.Fatalf("code=%d err=%q out=%q", code, errOut, out)
+	}
+	var payload struct {
+		UserID int `json:"user_id"`
+		Count  int `json:"count"`
+		Cards  []struct {
+			CardID         int    `json:"card_id"`
+			CardExternalID string `json:"card_external_id"`
+			CardLast4      string `json:"card_last4"`
+			IsDefault      bool   `json:"is_default"`
+		} `json:"cards"`
+	}
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.UserID != 42 || payload.Count != 1 {
+		t.Fatalf("%+v", payload)
+	}
+	if payload.Cards[0].CardID != 46111484 || payload.Cards[0].CardLast4 != "4242" ||
+		payload.Cards[0].CardExternalID != "00000000-0000-4000-8000-000000000001" || !payload.Cards[0].IsDefault {
+		t.Fatalf("%+v", payload.Cards[0])
 	}
 }
 

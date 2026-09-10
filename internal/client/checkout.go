@@ -44,6 +44,10 @@ func (c *Client) BuildCheckout(in BookPlaceInput) (CheckoutRequest, RateQuote, e
 	if err != nil {
 		return CheckoutRequest{}, RateQuote{}, exitcode.Usagef("account profile required for checkout: %v", err)
 	}
+	me, err = c.EnrichCreditCards(me)
+	if err != nil {
+		return CheckoutRequest{}, RateQuote{}, exitcode.Usagef("payment cards unavailable: %v", err)
+	}
 	email, err := c.ResolveEmail(in.Email)
 	if err != nil {
 		return CheckoutRequest{}, RateQuote{}, exitcode.Usagef("--email required when account profile unavailable: %v", err)
