@@ -35,7 +35,7 @@ spothero-pp-cli doctor --json
 spothero-pp-cli auth status
 ```
 
-4. Search (address **or** lat/lng). Uses Craig bulk transient inventory (`api.spothero.com/v2`), not the dead `/api/v1/facilities/` path:
+4. Search (address **or** lat/lng). Uses `GET api.spothero.com/v2/search/transient` (live HAR path), not dead `/api/v1/facilities/`:
 
 ```bash
 spothero-pp-cli search --address "500 Howard St, San Francisco, CA" \

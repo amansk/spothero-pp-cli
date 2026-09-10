@@ -17,7 +17,7 @@ func newSearchCmd(opt *Options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "search",
 		Short: "Search parking near an address or coordinates",
-		Long:  "Geocodes via spothero.com search-params, then queries Craig bulk transient inventory (api.spothero.com/v2). Naive --starts/--ends are interpreted in the search city's local timezone when known; use RFC3339 with Z or offset to override.",
+		Long:  "Geocodes via spothero.com search-params, then GET api.spothero.com/v2/search/transient (live HAR path). Naive --starts/--ends are interpreted in the search city's local timezone when known; use RFC3339 with Z or offset to override.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if starts == "" || ends == "" {
 				return exitcode.Usagef("--starts and --ends are required (e.g. 2026-09-15T09:00)")

@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,7 +14,7 @@ import (
 	"github.com/amansk/spothero-pp-cli/internal/exitcode"
 )
 
-// BulkTransientSearchRequest is POST /v2/search/bulk/transient body (live confirmed).
+// BulkTransientSearchRequest is POST /v2/search/bulk/transient body (fallback).
 type BulkTransientSearchRequest struct {
 	Periods                []SearchPeriod `json:"periods"`
 	Oversize               bool           `json:"oversize"`
@@ -109,6 +110,49 @@ func (c *Client) doCraigJSON(method, path string, query url.Values, body any, ou
 	return nil
 }
 
+type craigSearchResponse struct {
+	Results []json.RawMessage `json:"results"`
+	Next    string            `json:"@next"`
+}
+
+func newCraigTrackingIDs() (sessionID, searchID, actionID, fingerprint string) {
+	return newRandomUUID(), newRandomUUID(), newRandomUUID(), newRandomUUID()
+}
+
+func newRandomUUID() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// searchTransientGET is the live HAR path for consumer web inventory search.
+func (c *Client) searchTransientGET(lat, lon float64, startsUTC, endsUTC string, maxDist, pageSize int) (craigSearchResponse, error) {
+	sessionID, searchID, actionID, fingerprint := newCraigTrackingIDs()
+	q := url.Values{}
+	q.Set("lat", fmt.Sprintf("%f", lat))
+	q.Set("lon", fmt.Sprintf("%f", lon))
+	q.Set("starts", startsUTC)
+	q.Set("ends", endsUTC)
+	q.Set("sort_by", "relevance")
+	q.Set("include_walking_distance", "true")
+	q.Set("show_unavailable", "false")
+	q.Set("initial_search", "true")
+	q.Set("action", "LIST_SEARCH")
+	q.Set("session_id", sessionID)
+	q.Set("search_id", searchID)
+	q.Set("action_id", actionID)
+	q.Set("fingerprint", fingerprint)
+	q.Set("max_distance_meters", strconv.Itoa(maxDist))
+	q.Set("page_size", strconv.Itoa(pageSize))
+	var resp craigSearchResponse
+	if err := c.doCraigJSON(http.MethodGet, PathCraigTransientSearch, q, nil, &resp); err != nil {
+		return craigSearchResponse{}, err
+	}
+	return resp, nil
+}
+
 func (c *Client) searchBulkTransient(lat, lon float64, req BulkTransientSearchRequest) (craigSearchResponse, error) {
 	q := url.Values{}
 	q.Set("lat", fmt.Sprintf("%f", lat))
@@ -120,9 +164,23 @@ func (c *Client) searchBulkTransient(lat, lon float64, req BulkTransientSearchRe
 	return resp, nil
 }
 
-type craigSearchResponse struct {
-	Results []json.RawMessage `json:"results"`
-	Next    string            `json:"@next"`
+// searchInventory prefers GET /search/transient (live HAR); falls back to bulk POST.
+func (c *Client) searchInventory(lat, lon float64, startsUTC, endsUTC string, maxDist, pageSize int) (craigSearchResponse, error) {
+	resp, err := c.searchTransientGET(lat, lon, startsUTC, endsUTC, maxDist, pageSize)
+	if err == nil {
+		return resp, nil
+	}
+	periods := []SearchPeriod{{Starts: startsUTC, Ends: endsUTC}}
+	req := BulkTransientSearchRequest{
+		Periods:                periods,
+		Oversize:               false,
+		ShowUnavailable:        false,
+		SortBy:                 "relevance",
+		IncludeWalkingDistance: true,
+		MaxDistanceMeters:      maxDist,
+		PageSize:               pageSize,
+	}
+	return c.searchBulkTransient(lat, lon, req)
 }
 
 func parseCraigSearchResults(items []json.RawMessage) ([]SearchSpot, error) {
@@ -137,6 +195,13 @@ func parseCraigSearchResults(items []json.RawMessage) ([]SearchSpot, error) {
 	return out, nil
 }
 
+type rateQuoteWire struct {
+	Quote struct {
+		TotalPrice      moneyWire `json:"total_price"`
+		AdvertisedPrice moneyWire `json:"advertised_price"`
+	} `json:"quote"`
+}
+
 func parseCraigSearchResult(raw json.RawMessage) (SearchSpot, error) {
 	var wire struct {
 		Distance struct {
@@ -144,41 +209,38 @@ func parseCraigSearchResult(raw json.RawMessage) (SearchSpot, error) {
 			LinearMeters  float64 `json:"linear_meters"`
 		} `json:"distance"`
 		AveragePrice moneyWire `json:"average_price"`
-		Facility     struct {
+		Availability struct {
+			Available bool `json:"available"`
+		} `json:"availability"`
+		Rates     []rateQuoteWire `json:"rates"`
+		BulkRates []struct {
+			Rates []rateQuoteWire `json:"rates"`
+		} `json:"bulk_rates"`
+		Facility struct {
 			Common struct {
-				ID        FlexID `json:"id"`
-				Title     string `json:"title"`
-				Slug      string `json:"slug"`
-				Status    string `json:"status"`
+				ID        FlexID         `json:"id"`
+				Title     string         `json:"title"`
+				Slug      string         `json:"slug"`
+				Status    string         `json:"status"`
 				Addresses []craigAddress `json:"addresses"`
 			} `json:"common"`
 		} `json:"facility"`
-		BulkRates []struct {
-			Rates []struct {
-				Quote struct {
-					TotalPrice moneyWire `json:"total_price"`
-				} `json:"quote"`
-			} `json:"rates"`
-		} `json:"bulk_rates"`
 	}
 	if err := json.Unmarshal(raw, &wire); err != nil {
 		return SearchSpot{}, fmt.Errorf("craig result: %w", err)
 	}
 	id, _ := strconv.Atoi(wire.Facility.Common.ID.String())
-	priceCents := int(wire.AveragePrice.Value)
-	if priceCents == 0 {
-		for _, br := range wire.BulkRates {
-			for _, rate := range br.Rates {
-				if v := int(rate.Quote.TotalPrice.Value); v > 0 {
-					priceCents = v
-					break
-				}
-			}
-		}
-	}
+	priceCents := pickPriceCents(wire.AveragePrice, wire.Rates, wire.BulkRates)
 	walkM := wire.Distance.WalkingMeters
 	if walkM == 0 && wire.Distance.LinearMeters > 0 {
 		walkM = int(wire.Distance.LinearMeters)
+	}
+	available := wire.Availability.Available
+	if !available && wire.Facility.Common.Status == "on_sales_allowed" && len(wire.Rates) > 0 {
+		available = true
+	}
+	if wire.Facility.Common.Status != "" && wire.Facility.Common.Status != "on_sales_allowed" {
+		available = false
 	}
 	return SearchSpot{
 		FacilityID:     id,
@@ -188,9 +250,36 @@ func parseCraigSearchResult(raw json.RawMessage) (SearchSpot, error) {
 		DistanceMeters: walkM,
 		PriceCents:     priceCents,
 		Price:          formatUSD(priceCents),
-		Available:      wire.Facility.Common.Status == "on_sales_allowed",
+		Available:      available,
 		Status:         wire.Facility.Common.Status,
 	}, nil
+}
+
+func pickPriceCents(avg moneyWire, rates []rateQuoteWire, bulk []struct {
+	Rates []rateQuoteWire `json:"rates"`
+}) int {
+	if v := int(avg.Value); v > 0 {
+		return v
+	}
+	if len(rates) > 0 {
+		if v := int(rates[0].Quote.TotalPrice.Value); v > 0 {
+			return v
+		}
+		if v := int(rates[0].Quote.AdvertisedPrice.Value); v > 0 {
+			return v
+		}
+	}
+	for _, br := range bulk {
+		for _, rate := range br.Rates {
+			if v := int(rate.Quote.TotalPrice.Value); v > 0 {
+				return v
+			}
+			if v := int(rate.Quote.AdvertisedPrice.Value); v > 0 {
+				return v
+			}
+		}
+	}
+	return 0
 }
 
 type moneyWire struct {

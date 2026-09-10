@@ -242,16 +242,9 @@ func (c *Client) Search(q SearchQuery) (*SearchResult, error) {
 	if maxDist <= 0 {
 		maxDist = 1609
 	}
-	req := BulkTransientSearchRequest{
-		Periods:                periods,
-		Oversize:               false,
-		ShowUnavailable:        false,
-		SortBy:                 "relevance",
-		IncludeWalkingDistance: true,
-		MaxDistanceMeters:      maxDist,
-		PageSize:               25,
-	}
-	resp, err := c.searchBulkTransient(params.Latitude, params.Longitude, req)
+	startsUTC := periods[0].Starts
+	endsUTC := periods[0].Ends
+	resp, err := c.searchInventory(params.Latitude, params.Longitude, startsUTC, endsUTC, maxDist, 25)
 	if err != nil {
 		return nil, err
 	}

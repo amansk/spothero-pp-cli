@@ -127,9 +127,9 @@ func TestSearchIntegration(t *testing.T) {
 				"sort": "distance", "sort_order": "asc", "distance_lt": 1609.0,
 				"page_info": map[string]any{"setup": map[string]any{"city": map[string]any{"slug": "chicago"}}},
 			}))
-		case "/search/bulk/transient":
+		case "/search/transient":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"results":[{"distance":{"walking_meters":100},"average_price":{"value":1200},"facility":{"common":{"id":"99","title":"Lot","status":"on_sales_allowed","addresses":[]}}}]}`))
+			_, _ = w.Write([]byte(`{"results":[{"distance":{"walking_meters":100},"rates":[{"quote":{"total_price":{"value":1200}}}],"availability":{"available":true},"facility":{"common":{"id":"99","title":"Lot","status":"on_sales_allowed","addresses":[]}}}]}`))
 		default:
 			t.Fatalf("unexpected %s", r.URL.Path)
 		}

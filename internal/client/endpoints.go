@@ -19,7 +19,8 @@ const (
 	PathReservationCancel = "/reservations/%s/cancellation/"
 )
 
-// Craig consumer search paths (live confirmed Sep 2026).
+// Craig consumer search paths (live confirmed Sep 2026 HAR).
 const (
+	PathCraigTransientSearch     = "/search/transient"
 	PathCraigBulkTransientSearch = "/search/bulk/transient"
 )
