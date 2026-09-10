@@ -42,12 +42,9 @@ func (c *Client) BuildCheckout(in BookPlaceInput) (CheckoutRequest, RateQuote, e
 		return CheckoutRequest{}, RateQuote{}, exitcode.Usagef("--email required when account profile unavailable: %v", err)
 	}
 
-	cardID := in.CardID
-	if cardID == 0 {
-		cardID = me.DefaultCardID
-	}
-	if cardID == 0 {
-		return CheckoutRequest{}, RateQuote{}, exitcode.Usagef("no default payment card; pass --card-id")
+	cardExternalID, err := resolveCardExternalID(me, in.CardExternalID, in.CardID)
+	if err != nil {
+		return CheckoutRequest{}, RateQuote{}, exitcode.Usagef("%v", err)
 	}
 
 	ctx := CheckoutItemContext{
@@ -95,11 +92,10 @@ func (c *Client) BuildCheckout(in BookPlaceInput) (CheckoutRequest, RateQuote, e
 	}
 
 	req := CheckoutRequest{
-		Currency: "usd",
-		Email:    email,
-		Payment: CheckoutPayment{
-			Cards: []CheckoutCard{{CardID: cardID}},
-		},
+		Currency:          "usd",
+		Email:             email,
+		UseSpotHeroCredit: false,
+		Cards:             []CheckoutCard{{CardExternalID: cardExternalID}},
 		Items: []CheckoutItem{{
 			ItemType:    "rental",
 			Price:       chosen.PriceCents,

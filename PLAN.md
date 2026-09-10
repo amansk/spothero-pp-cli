@@ -45,7 +45,8 @@ Response: `{ tracking, result }` with `rates[].quote`:
 {
   "currency": "usd",
   "email": "user@example.com",
-  "payment": { "cards": [{ "card_id": 123 }] },
+  "use_spothero_credit": false,
+  "cards": [{ "card_external_id": "REDACTED-CARD-UUID" }],
   "items": [{
     "item_type": "rental",
     "price": 2968,
@@ -66,7 +67,7 @@ Response: `{ tracking, result }` with `rates[].quote`:
 
 | Endpoint | Use |
 |----------|-----|
-| `GET /users/me/` | Email, default card (`default_card_id` or `payment_methods`) |
+| `GET /users/me/` | Email, `credit_cards[]` with `card_external_id` + `card_id`, default card |
 | `GET /users/{id}/vehicles/` | Default saved vehicle → `vehicle_profile_id` |
 | `GET /user/` | Fallback email only; often 401 while reservations work |
 

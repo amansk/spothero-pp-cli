@@ -24,7 +24,7 @@ func mockHTTP(t *testing.T) *client.Client {
 		case "/user/":
 			_, _ = w.Write([]byte(`{"data":{"id":1,"email":"user@example.com"}}`))
 		case "/users/me/":
-			_, _ = w.Write([]byte(`{"data":{"id":42,"email":"user@example.com","default_card_id":123}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":42,"email":"user@example.com","default_card_id":46111484,"credit_cards":[{"card_id":46111484,"card_external_id":"REDACTED-CARD-UUID","is_default":true}]}}`))
 		case "/users/42/vehicles/":
 			_, _ = w.Write([]byte(`{"data":{"results":[{"id":37062538,"license_plate":"9XCV666","license_plate_state":"CA","is_default":true}]}}`))
 		case "/reservations/":
@@ -146,10 +146,12 @@ func TestBookPlaceDryRunCheckoutBody(t *testing.T) {
 	if ctx["facility"].(float64) != 6698 || ctx["vehicle_profile_id"].(float64) != 37062538 {
 		t.Fatalf("context=%v", ctx)
 	}
-	payment := payload.Request["payment"].(map[string]any)
-	cards := payment["cards"].([]any)
-	if cards[0].(map[string]any)["card_id"].(float64) != 123 {
-		t.Fatalf("payment=%v", payment)
+	if payload.Request["use_spothero_credit"] != false {
+		t.Fatalf("use_spothero_credit=%v", payload.Request["use_spothero_credit"])
+	}
+	cards := payload.Request["cards"].([]any)
+	if cards[0].(map[string]any)["card_external_id"] != "REDACTED-CARD-UUID" {
+		t.Fatalf("cards=%v", payload.Request["cards"])
 	}
 }
 

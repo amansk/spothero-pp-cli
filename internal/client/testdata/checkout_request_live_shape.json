@@ -1,13 +1,12 @@
 {
   "currency": "usd",
   "email": "user@example.com",
-  "payment": {
-    "cards": [
-      {
-        "card_id": 123
-      }
-    ]
-  },
+  "use_spothero_credit": false,
+  "cards": [
+    {
+      "card_external_id": "REDACTED-CARD-UUID"
+    }
+  ],
   "items": [
     {
       "item_type": "rental",

@@ -67,13 +67,22 @@ type UserProfile struct {
 	LastName  string `json:"last_name"`
 }
 
+// CreditCard is a saved payment method on the consumer account.
+type CreditCard struct {
+	CardID         int    `json:"card_id,omitempty"`
+	CardExternalID string `json:"card_external_id,omitempty"`
+	IsDefault      bool   `json:"is_default"`
+}
+
 // UserAccount is GET /users/me/ (reservation-auth authoritative).
 type UserAccount struct {
-	ID             int    `json:"id"`
-	Email          string `json:"email"`
-	FirstName      string `json:"first_name,omitempty"`
-	LastName       string `json:"last_name,omitempty"`
-	DefaultCardID  int    `json:"default_card_id,omitempty"`
+	ID                    int          `json:"id"`
+	Email                 string       `json:"email"`
+	FirstName             string       `json:"first_name,omitempty"`
+	LastName              string       `json:"last_name,omitempty"`
+	DefaultCardID         int          `json:"default_card_id,omitempty"`
+	DefaultCardExternalID string       `json:"default_card_external_id,omitempty"`
+	CreditCards           []CreditCard `json:"credit_cards,omitempty"`
 }
 
 // VehicleProfile is a saved vehicle on the consumer account.
@@ -118,10 +127,11 @@ type RateQuote struct {
 
 // CheckoutRequest is POST /checkout/ body (consumer-checkout live shape).
 type CheckoutRequest struct {
-	Items    []CheckoutItem  `json:"items"`
-	Payment  CheckoutPayment `json:"payment"`
-	Currency string          `json:"currency"`
-	Email    string          `json:"email"`
+	Items             []CheckoutItem `json:"items"`
+	Currency          string         `json:"currency"`
+	Email             string         `json:"email"`
+	Cards             []CheckoutCard `json:"cards"`
+	UseSpotHeroCredit bool           `json:"use_spothero_credit"`
 }
 
 type CheckoutItem struct {
@@ -142,12 +152,8 @@ type CheckoutItemContext struct {
 	LicensePlateState string `json:"license_plate_state,omitempty"`
 }
 
-type CheckoutPayment struct {
-	Cards []CheckoutCard `json:"cards"`
-}
-
 type CheckoutCard struct {
-	CardID int `json:"card_id"`
+	CardExternalID string `json:"card_external_id"`
 }
 
 // BookPlaceInput configures checkout body assembly for book place.
@@ -160,6 +166,7 @@ type BookPlaceInput struct {
 	SelectRateID      string
 	VehicleProfileID  int
 	CardID            int
+	CardExternalID    string
 	LicensePlateStr   string
 	LicensePlateState string
 }

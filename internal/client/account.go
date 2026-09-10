@@ -35,20 +35,19 @@ func (c *Client) ResolveEmail(preferred string) (string, error) {
 
 func parseUserAccount(raw json.RawMessage) (UserAccount, error) {
 	var wire struct {
-		ID        FlexInt `json:"id"`
-		Email     string  `json:"email"`
-		FirstName string  `json:"first_name"`
-		LastName  string  `json:"last_name"`
-		DefaultCardID FlexInt `json:"default_card_id"`
+		ID             FlexInt `json:"id"`
+		Email          string  `json:"email"`
+		FirstName      string  `json:"first_name"`
+		LastName       string  `json:"last_name"`
+		DefaultCardID  FlexInt `json:"default_card_id"`
 		PaymentMethods []struct {
-			ID        FlexInt `json:"id"`
-			CardID    FlexInt `json:"card_id"`
-			IsDefault bool    `json:"is_default"`
+			ID             FlexInt `json:"id"`
+			CardID         FlexInt `json:"card_id"`
+			CardExternalID string  `json:"card_external_id"`
+			IsDefault      bool    `json:"is_default"`
 		} `json:"payment_methods"`
-		Cards []struct {
-			CardID    FlexInt `json:"card_id"`
-			IsDefault bool    `json:"is_default"`
-		} `json:"cards"`
+		Cards []creditCardWire `json:"cards"`
+		CreditCards []creditCardWire `json:"credit_cards"`
 	}
 	if err := json.Unmarshal(raw, &wire); err != nil {
 		return UserAccount{}, err
@@ -62,30 +61,88 @@ func parseUserAccount(raw json.RawMessage) (UserAccount, error) {
 	if wire.DefaultCardID > 0 {
 		out.DefaultCardID = int(wire.DefaultCardID)
 	}
-	if out.DefaultCardID == 0 {
-		for _, pm := range wire.PaymentMethods {
-			if pm.IsDefault {
-				if pm.CardID > 0 {
-					out.DefaultCardID = int(pm.CardID)
-				} else if pm.ID > 0 {
-					out.DefaultCardID = int(pm.ID)
-				}
-				break
-			}
-		}
+	cards := append(append([]creditCardWire{}, wire.CreditCards...), wire.Cards...)
+	for _, pm := range wire.PaymentMethods {
+		cards = append(cards, creditCardWire{
+			ID:             pm.ID,
+			CardID:         pm.CardID,
+			CardExternalID: pm.CardExternalID,
+			IsDefault:      pm.IsDefault,
+		})
 	}
-	if out.DefaultCardID == 0 {
-		for _, card := range wire.Cards {
-			if card.IsDefault && card.CardID > 0 {
-				out.DefaultCardID = int(card.CardID)
-				break
-			}
+	out.CreditCards = normalizeCreditCards(cards)
+	if ext, id, ok := pickDefaultCardExternal(out.CreditCards, out.DefaultCardID); ok {
+		out.DefaultCardExternalID = ext
+		if out.DefaultCardID == 0 {
+			out.DefaultCardID = id
 		}
-	}
-	if out.DefaultCardID == 0 && len(wire.Cards) == 1 && wire.Cards[0].CardID > 0 {
-		out.DefaultCardID = int(wire.Cards[0].CardID)
 	}
 	return out, nil
+}
+
+type creditCardWire struct {
+	ID             FlexInt `json:"id"`
+	CardID         FlexInt `json:"card_id"`
+	CardExternalID string  `json:"card_external_id"`
+	IsDefault      bool    `json:"is_default"`
+}
+
+func normalizeCreditCards(wires []creditCardWire) []CreditCard {
+	out := make([]CreditCard, 0, len(wires))
+	for _, w := range wires {
+		cardID := int(w.CardID)
+		if cardID == 0 {
+			cardID = int(w.ID)
+		}
+		ext := w.CardExternalID
+		if cardID == 0 && ext == "" {
+			continue
+		}
+		out = append(out, CreditCard{
+			CardID:         cardID,
+			CardExternalID: ext,
+			IsDefault:      w.IsDefault,
+		})
+	}
+	return out
+}
+
+func pickDefaultCardExternal(cards []CreditCard, preferredID int) (externalID string, cardID int, ok bool) {
+	if preferredID > 0 {
+		for _, c := range cards {
+			if c.CardID == preferredID && c.CardExternalID != "" {
+				return c.CardExternalID, c.CardID, true
+			}
+		}
+	}
+	for _, c := range cards {
+		if c.IsDefault && c.CardExternalID != "" {
+			return c.CardExternalID, c.CardID, true
+		}
+	}
+	for _, c := range cards {
+		if c.CardExternalID != "" {
+			return c.CardExternalID, c.CardID, true
+		}
+	}
+	return "", 0, false
+}
+
+func resolveCardExternalID(me UserAccount, cardExternalID string, cardID int) (string, error) {
+	if cardExternalID != "" {
+		return cardExternalID, nil
+	}
+	lookupID := cardID
+	if lookupID == 0 {
+		lookupID = me.DefaultCardID
+	}
+	if ext, _, ok := pickDefaultCardExternal(me.CreditCards, lookupID); ok {
+		return ext, nil
+	}
+	if lookupID > 0 {
+		return "", fmt.Errorf("no card_external_id for card_id %d; pass --card-external-id", lookupID)
+	}
+	return "", fmt.Errorf("no default payment card; pass --card-external-id")
 }
 
 // ListVehicles returns saved vehicles for a user id.

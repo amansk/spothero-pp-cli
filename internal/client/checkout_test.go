@@ -85,10 +85,15 @@ func TestBuildCheckoutLiveShape(t *testing.T) {
 	if ctx["facility"].(float64) != 6698 || ctx["vehicle_profile_id"].(float64) != 37062538 {
 		t.Fatalf("context=%v", ctx)
 	}
-	payment := gotMap["payment"].(map[string]any)
-	cards := payment["cards"].([]any)
-	if cards[0].(map[string]any)["card_id"].(float64) != 123 {
-		t.Fatalf("payment=%v", payment)
+	if gotMap["use_spothero_credit"] != false {
+		t.Fatalf("use_spothero_credit=%v", gotMap["use_spothero_credit"])
+	}
+	cards := gotMap["cards"].([]any)
+	if cards[0].(map[string]any)["card_external_id"] != "REDACTED-CARD-UUID" {
+		t.Fatalf("cards=%v", gotMap["cards"])
+	}
+	if _, hasPayment := gotMap["payment"]; hasPayment {
+		t.Fatalf("unexpected nested payment field: %v", gotMap["payment"])
 	}
 }
 
@@ -107,9 +112,10 @@ func TestCheckoutSetsCSRFAndVersion(t *testing.T) {
 	c.BaseURL = srv.URL
 	c.HTTP = srv.Client()
 	_, err := c.Checkout(CheckoutRequest{
-		Currency: "usd",
-		Email:    "a@b.com",
-		Payment:  CheckoutPayment{Cards: []CheckoutCard{{CardID: 1}}},
+		Currency:          "usd",
+		Email:             "a@b.com",
+		UseSpotHeroCredit: false,
+		Cards:             []CheckoutCard{{CardExternalID: "73143f00-eae6-402a-8feb-0b6431ef7426"}},
 		Items: []CheckoutItem{{
 			ItemType:   "rental",
 			Price:      100,

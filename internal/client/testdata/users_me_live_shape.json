@@ -3,5 +3,12 @@
   "email": "user@example.com",
   "first_name": "Test",
   "last_name": "User",
-  "default_card_id": 123
+  "default_card_id": 46111484,
+  "credit_cards": [
+    {
+      "card_id": 46111484,
+      "card_external_id": "REDACTED-CARD-UUID",
+      "is_default": true
+    }
+  ]
 }

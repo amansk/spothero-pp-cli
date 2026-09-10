@@ -17,8 +17,22 @@ func TestParseUserAccountDefaultCard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if acct.ID != 42 || acct.Email != "user@example.com" || acct.DefaultCardID != 123 {
+	if acct.ID != 42 || acct.Email != "user@example.com" || acct.DefaultCardID != 46111484 {
 		t.Fatalf("%+v", acct)
+	}
+	if acct.DefaultCardExternalID != "REDACTED-CARD-UUID" {
+		t.Fatalf("external=%q", acct.DefaultCardExternalID)
+	}
+}
+
+func TestResolveCardExternalIDFromNumericID(t *testing.T) {
+	acct, err := parseUserAccount(usersMeFixtureAccount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ext, err := resolveCardExternalID(acct, "", 46111484)
+	if err != nil || ext != "REDACTED-CARD-UUID" {
+		t.Fatalf("ext=%q err=%v", ext, err)
 	}
 }
 
@@ -34,12 +48,12 @@ func TestParseVehiclesDefault(t *testing.T) {
 }
 
 func TestParseUserAccountPaymentMethodsFallback(t *testing.T) {
-	raw := json.RawMessage(`{"id":1,"email":"a@b.com","payment_methods":[{"id":99,"is_default":true}]}`)
+	raw := json.RawMessage(`{"id":1,"email":"a@b.com","payment_methods":[{"id":99,"card_external_id":"uuid-99","is_default":true}]}`)
 	acct, err := parseUserAccount(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if acct.DefaultCardID != 99 {
-		t.Fatalf("card=%d", acct.DefaultCardID)
+	if acct.DefaultCardExternalID != "uuid-99" {
+		t.Fatalf("external=%q", acct.DefaultCardExternalID)
 	}
 }

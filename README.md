@@ -66,7 +66,7 @@ spothero-pp-cli book preview --facility-id 12345 \
 
 Uses Craig `GET /v2/search/transient/{facilityId}` (no charge). Pass `--city-slug` from search output for naive local datetimes.
 
-Live booking requires **all three** gates (exact confirm string). The CLI refreshes the Craig quote, resolves email/default card/vehicle from `/users/me/` and `/users/{id}/vehicles/`, and POSTs the consumer-checkout body to `/checkout/` (nested `item_context`, `quote_token`/`quote_mac`, `payment.cards`, currency `usd`).
+Live booking requires **all three** gates (exact confirm string). The CLI refreshes the Craig quote, resolves email/default card/vehicle from `/users/me/` and `/users/{id}/vehicles/`, and POSTs the consumer-checkout body to `/checkout/` (nested `item_context`, `quote_token`/`quote_mac`, top-level `cards: [{ card_external_id }]`, `use_spothero_credit`, currency `usd`).
 
 ```bash
 spothero-pp-cli book place --facility-id 12345 \
@@ -82,7 +82,7 @@ Inspect the checkout payload without posting:
 spothero-pp-cli book place ... --dry-run --json
 ```
 
-Overrides: `--card-id`, `--vehicle-profile-id`, `--license-plate`, `--license-plate-state`, `--email`.
+Overrides: `--card-external-id`, `--card-id` (maps to external id from account), `--vehicle-profile-id`, `--license-plate`, `--license-plate-state`, `--email`.
 
 ## Cancellation (token-gated)
 
