@@ -37,9 +37,15 @@ func parseUserAccount(raw json.RawMessage) (UserAccount, error) {
 	var wire struct {
 		ID             FlexInt `json:"id"`
 		Email          string  `json:"email"`
+		PhoneNumber    string  `json:"phone_number"`
+		Phone          string  `json:"phone"`
+		MobilePhone    string  `json:"mobile_phone"`
 		FirstName      string  `json:"first_name"`
 		LastName       string  `json:"last_name"`
 		DefaultCardID  FlexInt `json:"default_card_id"`
+		ContactInfo    struct {
+			PhoneNumber string `json:"phone_number"`
+		} `json:"contact_info"`
 		PaymentMethods []struct {
 			ID             FlexInt `json:"id"`
 			CardID         FlexInt `json:"card_id"`
@@ -58,6 +64,7 @@ func parseUserAccount(raw json.RawMessage) (UserAccount, error) {
 		FirstName: wire.FirstName,
 		LastName:  wire.LastName,
 	}
+	out.PhoneNumber = firstNonEmpty(wire.PhoneNumber, wire.Phone, wire.MobilePhone, wire.ContactInfo.PhoneNumber)
 	if wire.DefaultCardID > 0 {
 		out.DefaultCardID = int(wire.DefaultCardID)
 	}
@@ -126,6 +133,25 @@ func pickDefaultCardExternal(cards []CreditCard, preferredID int) (externalID st
 		}
 	}
 	return "", 0, false
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func resolvePhoneNumber(me UserAccount, override string) (string, error) {
+	if override != "" {
+		return override, nil
+	}
+	if me.PhoneNumber != "" {
+		return me.PhoneNumber, nil
+	}
+	return "", fmt.Errorf("phone_number required; pass --phone or add contact info on account")
 }
 
 func resolveCardExternalID(me UserAccount, cardExternalID string, cardID int) (string, error) {

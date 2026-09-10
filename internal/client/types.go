@@ -78,11 +78,18 @@ type CreditCard struct {
 type UserAccount struct {
 	ID                    int          `json:"id"`
 	Email                 string       `json:"email"`
+	PhoneNumber           string       `json:"phone_number,omitempty"`
 	FirstName             string       `json:"first_name,omitempty"`
 	LastName              string       `json:"last_name,omitempty"`
 	DefaultCardID         int          `json:"default_card_id,omitempty"`
 	DefaultCardExternalID string       `json:"default_card_external_id,omitempty"`
 	CreditCards           []CreditCard `json:"credit_cards,omitempty"`
+}
+
+// CraigTracking holds Craig search tracking ids for checkout item_context.
+type CraigTracking struct {
+	SearchID string `json:"search_id,omitempty"`
+	ActionID string `json:"action_id,omitempty"`
 }
 
 // VehicleProfile is a saved vehicle on the consumer account.
@@ -107,6 +114,7 @@ type FacilityRateResult struct {
 	PeriodsUTC   []SearchPeriod `json:"periods_utc"`
 	TimezoneNote string         `json:"timezone_note,omitempty"`
 	Title        string         `json:"title,omitempty"`
+	Tracking     CraigTracking  `json:"tracking,omitempty"`
 }
 
 // RateQuote is a facility rate for a time window with checkout quote binding fields.
@@ -127,11 +135,16 @@ type RateQuote struct {
 
 // CheckoutRequest is POST /checkout/ body (consumer-checkout live shape).
 type CheckoutRequest struct {
-	Items             []CheckoutItem `json:"items"`
-	Currency          string         `json:"currency"`
-	Email             string         `json:"email"`
-	Cards             []CheckoutCard `json:"cards"`
+	Items      []CheckoutItem  `json:"items"`
+	Payment    CheckoutPayment `json:"payment"`
+	TotalPrice int             `json:"total_price"`
+	Currency   string          `json:"currency"`
+	Email      string          `json:"email"`
+}
+
+type CheckoutPayment struct {
 	UseSpotHeroCredit bool           `json:"use_spothero_credit"`
+	Cards             []CheckoutCard `json:"cards"`
 }
 
 type CheckoutItem struct {
@@ -147,6 +160,11 @@ type CheckoutItemContext struct {
 	Facility          int    `json:"facility"`
 	Starts            string `json:"starts"`
 	Ends              string `json:"ends"`
+	PhoneNumber       string `json:"phone_number"`
+	QuoteToken        string `json:"quote_token,omitempty"`
+	RentalSourceTitle string `json:"rental_source_title"`
+	SearchID          string `json:"search_id,omitempty"`
+	ActionID          string `json:"action_id,omitempty"`
 	VehicleProfileID  int    `json:"vehicle_profile_id,omitempty"`
 	LicensePlateStr   string `json:"license_plate_str,omitempty"`
 	LicensePlateState string `json:"license_plate_state,omitempty"`
@@ -167,6 +185,8 @@ type BookPlaceInput struct {
 	VehicleProfileID  int
 	CardID            int
 	CardExternalID    string
+	PhoneNumber       string
+	RentalSourceTitle string
 	LicensePlateStr   string
 	LicensePlateState string
 }

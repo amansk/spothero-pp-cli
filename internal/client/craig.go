@@ -308,22 +308,37 @@ type craigAddress struct {
 
 type craigFacilityResponse struct {
 	Result json.RawMessage `json:"result"`
+	Tracking struct {
+		SearchID string `json:"search_id"`
+		ActionID string `json:"action_id"`
+	} `json:"tracking"`
+}
+
+type craigFacilityQuote struct {
+	Result   json.RawMessage
+	Tracking CraigTracking
 }
 
 // searchTransientFacilityGET is GET /v2/search/transient/{facilityId} (live book preview path).
-func (c *Client) searchTransientFacilityGET(facilityID int, startsUTC, endsUTC string) (json.RawMessage, error) {
+func (c *Client) searchTransientFacilityGET(facilityID int, startsUTC, endsUTC string) (craigFacilityQuote, error) {
 	q := url.Values{}
 	q.Set("starts", startsUTC)
 	q.Set("ends", endsUTC)
 	path := fmt.Sprintf(PathCraigTransientFacility, facilityID)
 	var resp craigFacilityResponse
 	if err := c.doCraigJSON(http.MethodGet, path, q, nil, &resp); err != nil {
-		return nil, err
+		return craigFacilityQuote{}, err
 	}
 	if len(resp.Result) == 0 {
-		return nil, exitcode.NotFoundf("no quote for facility %d", facilityID)
+		return craigFacilityQuote{}, exitcode.NotFoundf("no quote for facility %d", facilityID)
 	}
-	return resp.Result, nil
+	return craigFacilityQuote{
+		Result: resp.Result,
+		Tracking: CraigTracking{
+			SearchID: resp.Tracking.SearchID,
+			ActionID: resp.Tracking.ActionID,
+		},
+	}, nil
 }
 
 func parseCraigFacilityRates(raw json.RawMessage, facilityID int, starts, ends string) ([]RateQuote, string, error) {

@@ -63,20 +63,25 @@ func TestBuildCheckoutLiveShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var gotMap, wantMap map[string]any
+	var gotMap map[string]any
 	if err := json.Unmarshal(got, &gotMap); err != nil {
 		t.Fatal(err)
 	}
-	if err := json.Unmarshal(checkoutRequestFixture, &wantMap); err != nil {
-		t.Fatal(err)
+	if gotMap["currency"] != "usd" || gotMap["total_price"].(float64) != 2968 {
+		t.Fatalf("currency/total=%v", gotMap)
 	}
-	if gotMap["currency"] != "usd" {
-		t.Fatalf("currency=%v", gotMap["currency"])
+	payment := gotMap["payment"].(map[string]any)
+	if payment["use_spothero_credit"] != false {
+		t.Fatalf("use_spothero_credit=%v", payment["use_spothero_credit"])
 	}
-	items, ok := gotMap["items"].([]any)
-	if !ok || len(items) != 1 {
-		t.Fatalf("items=%v", gotMap["items"])
+	cards := payment["cards"].([]any)
+	if cards[0].(map[string]any)["card_external_id"] != "REDACTED-CARD-UUID" {
+		t.Fatalf("cards=%v", payment["cards"])
 	}
+	if _, ok := gotMap["cards"]; ok {
+		t.Fatal("unexpected top-level cards")
+	}
+	items := gotMap["items"].([]any)
 	item := items[0].(map[string]any)
 	if item["rate_id"] != "113821" || item["quote_token"] != "REDACTED-QUOTE-TOKEN" || item["quote_mac"] != "113821" {
 		t.Fatalf("quote fields=%v", item)
@@ -85,15 +90,11 @@ func TestBuildCheckoutLiveShape(t *testing.T) {
 	if ctx["facility"].(float64) != 6698 || ctx["vehicle_profile_id"].(float64) != 37062538 {
 		t.Fatalf("context=%v", ctx)
 	}
-	if gotMap["use_spothero_credit"] != false {
-		t.Fatalf("use_spothero_credit=%v", gotMap["use_spothero_credit"])
+	if ctx["phone_number"] != "+14155550100" || ctx["rental_source_title"] != "web" {
+		t.Fatalf("contact/context=%v", ctx)
 	}
-	cards := gotMap["cards"].([]any)
-	if cards[0].(map[string]any)["card_external_id"] != "REDACTED-CARD-UUID" {
-		t.Fatalf("cards=%v", gotMap["cards"])
-	}
-	if _, hasPayment := gotMap["payment"]; hasPayment {
-		t.Fatalf("unexpected nested payment field: %v", gotMap["payment"])
+	if ctx["quote_token"] != "REDACTED-QUOTE-TOKEN" || ctx["search_id"] != "REDACTED-SEARCH-ID" {
+		t.Fatalf("tracking/context=%v", ctx)
 	}
 }
 
@@ -112,10 +113,13 @@ func TestCheckoutSetsCSRFAndVersion(t *testing.T) {
 	c.BaseURL = srv.URL
 	c.HTTP = srv.Client()
 	_, err := c.Checkout(CheckoutRequest{
-		Currency:          "usd",
-		Email:             "a@b.com",
-		UseSpotHeroCredit: false,
-		Cards:             []CheckoutCard{{CardExternalID: "73143f00-eae6-402a-8feb-0b6431ef7426"}},
+		TotalPrice: 100,
+		Currency:   "usd",
+		Email:      "a@b.com",
+		Payment: CheckoutPayment{
+			UseSpotHeroCredit: false,
+			Cards:             []CheckoutCard{{CardExternalID: "73143f00-eae6-402a-8feb-0b6431ef7426"}},
+		},
 		Items: []CheckoutItem{{
 			ItemType:   "rental",
 			Price:      100,
@@ -123,9 +127,12 @@ func TestCheckoutSetsCSRFAndVersion(t *testing.T) {
 			QuoteToken: "qt",
 			QuoteMAC:   "1",
 			ItemContext: CheckoutItemContext{
-				Facility: 1,
-				Starts:   "2026-09-15T09:00:00-07:00",
-				Ends:     "2026-09-15T17:00:00-07:00",
+				Facility:          1,
+				Starts:            "2026-09-15T09:00:00-07:00",
+				Ends:              "2026-09-15T17:00:00-07:00",
+				PhoneNumber:       "+14155550100",
+				QuoteToken:        "qt",
+				RentalSourceTitle: "web",
 			},
 		}},
 	})

@@ -1,12 +1,15 @@
 {
   "currency": "usd",
   "email": "user@example.com",
-  "use_spothero_credit": false,
-  "cards": [
-    {
-      "card_external_id": "REDACTED-CARD-UUID"
-    }
-  ],
+  "total_price": 2968,
+  "payment": {
+    "use_spothero_credit": false,
+    "cards": [
+      {
+        "card_external_id": "REDACTED-CARD-UUID"
+      }
+    ]
+  },
   "items": [
     {
       "item_type": "rental",
@@ -18,6 +21,10 @@
         "facility": 6698,
         "starts": "2026-09-15T09:00:00-07:00",
         "ends": "2026-09-15T17:00:00-07:00",
+        "phone_number": "+14155550100",
+        "quote_token": "REDACTED-QUOTE-TOKEN",
+        "rental_source_title": "web",
+        "search_id": "REDACTED-SEARCH-ID",
         "vehicle_profile_id": 37062538
       }
     }

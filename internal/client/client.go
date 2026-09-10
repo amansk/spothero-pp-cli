@@ -29,7 +29,7 @@ func New(session *auth.Session) *Client {
 		BaseURL: DefaultBaseURL,
 		HTTP:    &http.Client{Timeout: 30 * time.Second},
 		Session: session,
-		UserAgent: "spothero-pp-cli/0.1.5 (+https://github.com/amansk/spothero-pp-cli)",
+		UserAgent: "spothero-pp-cli/0.1.6 (+https://github.com/amansk/spothero-pp-cli)",
 	}
 }
 
@@ -380,11 +380,11 @@ func (c *Client) GetFacilityRates(q FacilityRateQuery) (FacilityRateResult, erro
 	}
 	startsUTC := periods[0].Starts
 	endsUTC := periods[0].Ends
-	raw, err := c.searchTransientFacilityGET(q.FacilityID, startsUTC, endsUTC)
+	fq, err := c.searchTransientFacilityGET(q.FacilityID, startsUTC, endsUTC)
 	if err != nil {
 		return FacilityRateResult{}, err
 	}
-	rates, title, err := parseCraigFacilityRates(raw, q.FacilityID, q.Starts, q.Ends)
+	rates, title, err := parseCraigFacilityRates(fq.Result, q.FacilityID, q.Starts, q.Ends)
 	if err != nil {
 		return FacilityRateResult{}, exitcode.APIf("%v", err)
 	}
@@ -394,6 +394,7 @@ func (c *Client) GetFacilityRates(q FacilityRateQuery) (FacilityRateResult, erro
 		PeriodsUTC:   periods,
 		TimezoneNote: note,
 		Title:        title,
+		Tracking:     fq.Tracking,
 	}, nil
 }
 

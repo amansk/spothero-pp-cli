@@ -75,13 +75,19 @@ func TestCheckoutDryRun(t *testing.T) {
 	})
 	c.DryRun = true
 	_, err := c.Checkout(client.CheckoutRequest{
-		Currency: "usd",
-		Email:    "a@b.com",
-		UseSpotHeroCredit: false,
-		Cards:             []client.CheckoutCard{{CardExternalID: "test-card-uuid"}},
+		TotalPrice: 100,
+		Currency:   "usd",
+		Email:      "a@b.com",
+		Payment: client.CheckoutPayment{
+			UseSpotHeroCredit: false,
+			Cards:             []client.CheckoutCard{{CardExternalID: "test-card-uuid"}},
+		},
 		Items: []client.CheckoutItem{{
 			ItemType: "rental", Price: 100, RateID: "1", QuoteToken: "qt", QuoteMAC: "1",
-			ItemContext: client.CheckoutItemContext{Facility: 1, Starts: "2026-09-15T09:00:00-07:00", Ends: "2026-09-15T17:00:00-07:00"},
+			ItemContext: client.CheckoutItemContext{
+				Facility: 1, Starts: "2026-09-15T09:00:00-07:00", Ends: "2026-09-15T17:00:00-07:00",
+				PhoneNumber: "+14155550100", RentalSourceTitle: "web",
+			},
 		}},
 	})
 	if err == nil {

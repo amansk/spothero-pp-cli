@@ -24,7 +24,7 @@ func mockHTTP(t *testing.T) *client.Client {
 		case "/user/":
 			_, _ = w.Write([]byte(`{"data":{"id":1,"email":"user@example.com"}}`))
 		case "/users/me/":
-			_, _ = w.Write([]byte(`{"data":{"id":42,"email":"user@example.com","default_card_id":46111484,"credit_cards":[{"card_id":46111484,"card_external_id":"REDACTED-CARD-UUID","is_default":true}]}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":42,"email":"user@example.com","phone_number":"+14155550100","default_card_id":46111484,"credit_cards":[{"card_id":46111484,"card_external_id":"REDACTED-CARD-UUID","is_default":true}]}}`))
 		case "/users/42/vehicles/":
 			_, _ = w.Write([]byte(`{"data":{"results":[{"id":37062538,"license_plate":"9XCV666","license_plate_state":"CA","is_default":true}]}}`))
 		case "/reservations/":
@@ -34,7 +34,7 @@ func mockHTTP(t *testing.T) *client.Client {
 		case "/reservations/r1/":
 			_, _ = w.Write([]byte(`{"data":{"rental_id":1,"display_id":"r1","status":"upcoming","is_cancellable":true}}`))
 		case "/search/transient/6698":
-			_, _ = w.Write([]byte(`{"result":{"availability":{"available":true},"rates":[{"quote":{"meta":{"quote_token":"tok-1","quote_mac":"113821"},"order":[{"rate_id":"113821","starts":"2026-09-15T09:00:00-07:00","ends":"2026-09-15T17:00:00-07:00","total_price":{"value":2968}}],"total_price":{"value":2968}}}],"facility":{"common":{"id":"6698","title":"Lot 6698","status":"on_sales_allowed"}}}}`))
+			_, _ = w.Write([]byte(`{"tracking":{"search_id":"search-1"},"result":{"availability":{"available":true},"rates":[{"quote":{"meta":{"quote_token":"tok-1","quote_mac":"113821"},"order":[{"rate_id":"113821","starts":"2026-09-15T09:00:00-07:00","ends":"2026-09-15T17:00:00-07:00","total_price":{"value":2968}}],"total_price":{"value":2968}}}],"facility":{"common":{"id":"6698","title":"Lot 6698","status":"on_sales_allowed"}}}}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -146,12 +146,19 @@ func TestBookPlaceDryRunCheckoutBody(t *testing.T) {
 	if ctx["facility"].(float64) != 6698 || ctx["vehicle_profile_id"].(float64) != 37062538 {
 		t.Fatalf("context=%v", ctx)
 	}
-	if payload.Request["use_spothero_credit"] != false {
-		t.Fatalf("use_spothero_credit=%v", payload.Request["use_spothero_credit"])
+	if ctx["phone_number"] != "+14155550100" || ctx["rental_source_title"] != "web" || ctx["quote_token"] != "tok-1" {
+		t.Fatalf("item_context=%v", ctx)
 	}
-	cards := payload.Request["cards"].([]any)
+	if payload.Request["total_price"].(float64) != 2968 {
+		t.Fatalf("total_price=%v", payload.Request["total_price"])
+	}
+	payment := payload.Request["payment"].(map[string]any)
+	if payment["use_spothero_credit"] != false {
+		t.Fatalf("use_spothero_credit=%v", payment["use_spothero_credit"])
+	}
+	cards := payment["cards"].([]any)
 	if cards[0].(map[string]any)["card_external_id"] != "REDACTED-CARD-UUID" {
-		t.Fatalf("cards=%v", payload.Request["cards"])
+		t.Fatalf("cards=%v", payment["cards"])
 	}
 }
 

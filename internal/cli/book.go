@@ -81,7 +81,7 @@ func newBookPlaceCmd(opt *Options) *cobra.Command {
 	var facilityID int
 	var starts, ends, rateID, email, citySlug string
 	var vehicleProfileID, cardID int
-	var cardExternalID, licensePlate, licensePlateState string
+	var cardExternalID, phone, licensePlate, licensePlateState string
 	var enableLive, ownerApproved bool
 	var confirm string
 	cmd := &cobra.Command{
@@ -111,6 +111,7 @@ func newBookPlaceCmd(opt *Options) *cobra.Command {
 				VehicleProfileID:  vehicleProfileID,
 				CardID:            cardID,
 				CardExternalID:    cardExternalID,
+				PhoneNumber:       phone,
 				LicensePlateStr:   licensePlate,
 				LicensePlateState: licensePlateState,
 			})
@@ -140,6 +141,7 @@ func newBookPlaceCmd(opt *Options) *cobra.Command {
 	cmd.Flags().IntVar(&vehicleProfileID, "vehicle-profile-id", 0, "Saved vehicle profile id for item_context")
 	cmd.Flags().IntVar(&cardID, "card-id", 0, "Saved payment card id (maps to card_external_id from account)")
 	cmd.Flags().StringVar(&cardExternalID, "card-external-id", "", "Saved card UUID for checkout (overrides --card-id lookup)")
+	cmd.Flags().StringVar(&phone, "phone", "", "E.164 phone for checkout item_context (default from /users/me/)")
 	cmd.Flags().StringVar(&licensePlate, "license-plate", "", "Ad-hoc license plate when required")
 	cmd.Flags().StringVar(&licensePlateState, "license-plate-state", "", "Ad-hoc license plate state when required")
 	cmd.Flags().BoolVar(&enableLive, "enable-live-booking", false, "Explicit opt-in to charge a payment method")

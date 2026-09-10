@@ -13,7 +13,7 @@
   "printer": "amansk",
   "printer_name": "Amandeep Khurana",
   "run_id": "20260910-spothero-hand",
-  "api_version": "0.1.5",
+  "api_version": "0.1.6",
   "auth_type": "cookie",
   "auth_env_vars": [
     "SPOTHERO_COOKIES"

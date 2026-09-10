@@ -1,6 +1,7 @@
 {
   "tracking": {
-    "search_id": "REDACTED"
+    "search_id": "REDACTED-SEARCH-ID",
+    "action_id": "REDACTED-ACTION-ID"
   },
   "result": {
     "distance": {

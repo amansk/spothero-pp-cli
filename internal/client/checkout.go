@@ -6,6 +6,8 @@ import (
 	"github.com/amansk/spothero-pp-cli/internal/exitcode"
 )
 
+const defaultRentalSourceTitle = "web"
+
 // BuildCheckout assembles a consumer checkout body from a fresh Craig quote and account data.
 func (c *Client) BuildCheckout(in BookPlaceInput) (CheckoutRequest, RateQuote, error) {
 	quote, err := c.GetFacilityRates(FacilityRateQuery{
@@ -41,16 +43,28 @@ func (c *Client) BuildCheckout(in BookPlaceInput) (CheckoutRequest, RateQuote, e
 	if err != nil {
 		return CheckoutRequest{}, RateQuote{}, exitcode.Usagef("--email required when account profile unavailable: %v", err)
 	}
-
+	phone, err := resolvePhoneNumber(me, in.PhoneNumber)
+	if err != nil {
+		return CheckoutRequest{}, RateQuote{}, exitcode.Usagef("%v", err)
+	}
 	cardExternalID, err := resolveCardExternalID(me, in.CardExternalID, in.CardID)
 	if err != nil {
 		return CheckoutRequest{}, RateQuote{}, exitcode.Usagef("%v", err)
 	}
 
+	rentalSource := in.RentalSourceTitle
+	if rentalSource == "" {
+		rentalSource = defaultRentalSourceTitle
+	}
+
 	ctx := CheckoutItemContext{
-		Facility: in.FacilityID,
-		Starts:   chosen.ContextStarts,
-		Ends:     chosen.ContextEnds,
+		Facility:          in.FacilityID,
+		Starts:            chosen.ContextStarts,
+		Ends:              chosen.ContextEnds,
+		PhoneNumber:       phone,
+		RentalSourceTitle: rentalSource,
+		SearchID:          quote.Tracking.SearchID,
+		ActionID:          quote.Tracking.ActionID,
 	}
 	if ctx.Starts == "" || ctx.Ends == "" {
 		params := SearchParams{CitySlug: in.CitySlug}
@@ -90,20 +104,26 @@ func (c *Client) BuildCheckout(in BookPlaceInput) (CheckoutRequest, RateQuote, e
 	if quoteMAC == "" {
 		quoteMAC = chosen.RateID
 	}
+	ctx.QuoteToken = chosen.QuoteToken
+
+	item := CheckoutItem{
+		ItemType:    "rental",
+		Price:       chosen.PriceCents,
+		RateID:      chosen.RateID,
+		QuoteToken:  chosen.QuoteToken,
+		QuoteMAC:    quoteMAC,
+		ItemContext: ctx,
+	}
 
 	req := CheckoutRequest{
-		Currency:          "usd",
-		Email:             email,
-		UseSpotHeroCredit: false,
-		Cards:             []CheckoutCard{{CardExternalID: cardExternalID}},
-		Items: []CheckoutItem{{
-			ItemType:    "rental",
-			Price:       chosen.PriceCents,
-			RateID:      chosen.RateID,
-			QuoteToken:  chosen.QuoteToken,
-			QuoteMAC:    quoteMAC,
-			ItemContext: ctx,
-		}},
+		TotalPrice: chosen.PriceCents,
+		Currency:   "usd",
+		Email:      email,
+		Payment: CheckoutPayment{
+			UseSpotHeroCredit: false,
+			Cards:             []CheckoutCard{{CardExternalID: cardExternalID}},
+		},
+		Items: []CheckoutItem{item},
 	}
 	return req, chosen, nil
 }
@@ -127,6 +147,12 @@ func validateCheckoutItem(item CheckoutItem) error {
 	}
 	if item.ItemContext.Facility == 0 || item.ItemContext.Starts == "" || item.ItemContext.Ends == "" {
 		return fmt.Errorf("incomplete item_context")
+	}
+	if item.ItemContext.PhoneNumber == "" {
+		return fmt.Errorf("item_context.phone_number required")
+	}
+	if item.ItemContext.RentalSourceTitle == "" {
+		return fmt.Errorf("item_context.rental_source_title required")
 	}
 	return nil
 }

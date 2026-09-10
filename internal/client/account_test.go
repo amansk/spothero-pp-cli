@@ -17,7 +17,7 @@ func TestParseUserAccountDefaultCard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if acct.ID != 42 || acct.Email != "user@example.com" || acct.DefaultCardID != 46111484 {
+	if acct.ID != 42 || acct.Email != "user@example.com" || acct.DefaultCardID != 46111484 || acct.PhoneNumber != "+14155550100" {
 		t.Fatalf("%+v", acct)
 	}
 	if acct.DefaultCardExternalID != "REDACTED-CARD-UUID" {

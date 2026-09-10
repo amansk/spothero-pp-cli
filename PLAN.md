@@ -45,8 +45,11 @@ Response: `{ tracking, result }` with `rates[].quote`:
 {
   "currency": "usd",
   "email": "user@example.com",
-  "use_spothero_credit": false,
-  "cards": [{ "card_external_id": "REDACTED-CARD-UUID" }],
+  "total_price": 2968,
+  "payment": {
+    "use_spothero_credit": false,
+    "cards": [{ "card_external_id": "REDACTED-CARD-UUID" }]
+  },
   "items": [{
     "item_type": "rental",
     "price": 2968,
@@ -57,17 +60,23 @@ Response: `{ tracking, result }` with `rates[].quote`:
       "facility": 6698,
       "starts": "2026-09-15T09:00:00-07:00",
       "ends": "2026-09-15T17:00:00-07:00",
+      "phone_number": "+14155550100",
+      "quote_token": "…",
+      "rental_source_title": "web",
+      "search_id": "…",
       "vehicle_profile_id": 37062538
     }
   }]
 }
 ```
 
+Payment is nested under `payment` (not top-level `cards`). Saved cards use `card_external_id` UUID, not numeric `card_id`.
+
 **Account discovery (reservation-auth authoritative):**
 
 | Endpoint | Use |
 |----------|-----|
-| `GET /users/me/` | Email, `credit_cards[]` with `card_external_id` + `card_id`, default card |
+| `GET /users/me/` | Email, `phone_number`, `credit_cards[]` with `card_external_id` + `card_id`, default card |
 | `GET /users/{id}/vehicles/` | Default saved vehicle → `vehicle_profile_id` |
 | `GET /user/` | Fallback email only; often 401 while reservations work |
 
