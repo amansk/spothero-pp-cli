@@ -26,6 +26,15 @@ func ImportChromeCookies() (*Session, error) {
 	if sess, err := importViaPython(cookiesDB); err == nil {
 		return sess, nil
 	}
+	if runtime.GOOS == "linux" {
+		// browser_cookie3 needs D-Bus/keyring on Linux and crashes on headless
+		// boxes; read with Python's stdlib sqlite3 and decrypt in Go instead.
+		if sess, err := importLinuxStdlib(cookiesDB); err == nil {
+			return sess, nil
+		} else if _, lerr := exec.LookPath("sqlite3"); lerr != nil {
+			return nil, err
+		}
+	}
 	return importViaSQLiteCopy(cookiesDB)
 }
 
