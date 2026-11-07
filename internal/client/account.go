@@ -35,15 +35,15 @@ func (c *Client) ResolveEmail(preferred string) (string, error) {
 
 func parseUserAccount(raw json.RawMessage) (UserAccount, error) {
 	var wire struct {
-		ID             FlexInt `json:"id"`
-		Email          string  `json:"email"`
-		PhoneNumber    string  `json:"phone_number"`
-		Phone          string  `json:"phone"`
-		MobilePhone    string  `json:"mobile_phone"`
-		FirstName      string  `json:"first_name"`
-		LastName       string  `json:"last_name"`
-		DefaultCardID  FlexInt `json:"default_card_id"`
-		ContactInfo    struct {
+		ID            FlexInt `json:"id"`
+		Email         string  `json:"email"`
+		PhoneNumber   string  `json:"phone_number"`
+		Phone         string  `json:"phone"`
+		MobilePhone   string  `json:"mobile_phone"`
+		FirstName     string  `json:"first_name"`
+		LastName      string  `json:"last_name"`
+		DefaultCardID FlexInt `json:"default_card_id"`
+		ContactInfo   struct {
 			PhoneNumber string `json:"phone_number"`
 		} `json:"contact_info"`
 		PaymentMethods []struct {
@@ -52,7 +52,7 @@ func parseUserAccount(raw json.RawMessage) (UserAccount, error) {
 			CardExternalID string  `json:"card_external_id"`
 			IsDefault      bool    `json:"is_default"`
 		} `json:"payment_methods"`
-		Cards []creditCardWire `json:"cards"`
+		Cards       []creditCardWire `json:"cards"`
 		CreditCards []creditCardWire `json:"credit_cards"`
 	}
 	if err := json.Unmarshal(raw, &wire); err != nil {

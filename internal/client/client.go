@@ -26,9 +26,9 @@ type Client struct {
 
 func New(session *auth.Session) *Client {
 	return &Client{
-		BaseURL: DefaultBaseURL,
-		HTTP:    &http.Client{Timeout: 30 * time.Second},
-		Session: session,
+		BaseURL:   DefaultBaseURL,
+		HTTP:      &http.Client{Timeout: 30 * time.Second},
+		Session:   session,
 		UserAgent: "spothero-pp-cli/0.1.8 (+https://github.com/amansk/spothero-pp-cli)",
 	}
 }
@@ -535,7 +535,7 @@ func (c *Client) RefundReservation(id string) (map[string]any, error) {
 // Ping checks API reachability without auth.
 func (c *Client) Ping() error {
 	_, err := c.GetSearchParams(SearchQuery{
-		Latitude: 41.88,
+		Latitude:  41.88,
 		Longitude: -87.62,
 		Starts:    time.Now().Add(24 * time.Hour).Format("2006-01-02T15:04"),
 		Ends:      time.Now().Add(27 * time.Hour).Format("2006-01-02T15:04"),

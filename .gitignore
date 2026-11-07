@@ -1,0 +1,6 @@
+# Built binaries and build output
+/spothero-pp-cli
+/spothero-pp-mcp
+/bin/
+/build/
+/dist/

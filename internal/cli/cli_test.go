@@ -134,8 +134,8 @@ func TestBookPlaceDryRunCheckoutBody(t *testing.T) {
 		t.Fatalf("code=%d err=%q out=%q", code, errOut, out)
 	}
 	var payload struct {
-		DryRun  bool                   `json:"dry_run"`
-		Request map[string]any         `json:"request"`
+		DryRun  bool           `json:"dry_run"`
+		Request map[string]any `json:"request"`
 	}
 	if err := json.Unmarshal([]byte(out), &payload); err != nil {
 		t.Fatal(err)

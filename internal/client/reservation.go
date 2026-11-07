@@ -8,22 +8,22 @@ import (
 
 // reservationWire matches live GET /api/v1/reservations/ payloads (Sep 2026 smoke).
 type reservationWire struct {
-	RentalID     FlexInt         `json:"rental_id"`
-	DisplayID    string          `json:"display_id"`
-	QRCodeUUID   string          `json:"qrcode_uuid"`
-	IDLegacy     FlexID          `json:"id"`
-	Price        FlexInt         `json:"price"`
-	PriceCents   FlexInt         `json:"price_cents"`
-	FacilityID   FlexInt         `json:"facility_id"`
-	FacilityTitle string         `json:"facility_title"`
-	Starts       string          `json:"starts"`
-	Ends         string          `json:"ends"`
-	Status       string          `json:"status"`
-	IsCancellable bool           `json:"is_cancellable"`
-	Cancellable  bool            `json:"cancellable"`
+	RentalID         FlexInt       `json:"rental_id"`
+	DisplayID        string        `json:"display_id"`
+	QRCodeUUID       string        `json:"qrcode_uuid"`
+	IDLegacy         FlexID        `json:"id"`
+	Price            FlexInt       `json:"price"`
+	PriceCents       FlexInt       `json:"price_cents"`
+	FacilityID       FlexInt       `json:"facility_id"`
+	FacilityTitle    string        `json:"facility_title"`
+	Starts           string        `json:"starts"`
+	Ends             string        `json:"ends"`
+	Status           string        `json:"status"`
+	IsCancellable    bool          `json:"is_cancellable"`
+	Cancellable      bool          `json:"cancellable"`
 	ConfirmationCode string        `json:"confirmation_code"`
-	Barcode      string          `json:"barcode"`
-	Facility     *facilityWire   `json:"facility"`
+	Barcode          string        `json:"barcode"`
+	Facility         *facilityWire `json:"facility"`
 }
 
 type facilityWire struct {

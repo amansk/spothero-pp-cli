@@ -4,11 +4,11 @@ package exitcode
 import "fmt"
 
 const (
-	OK = 0
-	Usage = 2
-	NotFound = 3
-	Auth = 4
-	API = 5
+	OK        = 0
+	Usage     = 2
+	NotFound  = 3
+	Auth      = 4
+	API       = 5
 	Transient = 7
 )
 
