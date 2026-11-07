@@ -1,111 +1,37 @@
-# SpotHero consumer API plan
+# SpotHero consumer API notes
 
-Hand-maintained reverse-engineering notes for **spothero-pp-cli**.
+Reverse-engineering notes for spothero-pp-cli. Updated 2026-11-07 from the logged-in site and its public JS bundles. Names and shapes only. Nothing marked "from the bundle" has been sent to SpotHero.
 
-> **Not the partner API.** Partner `X-API-Key` on `api.spothero.com/v2` is B2B-only. Consumer web uses cookie session on `spothero.com/api/v1` and Craig inventory on `api.spothero.com/v2` (no API key).
+> Not the partner API. Partner `X-API-Key` on `api.spothero.com/v2` is B2B only.
 
-## Search inventory (live HAR confirmed Sep 2026)
+## Session
 
-**Dead path:** `GET spothero.com/api/v1/facilities/` — always empty `results`. Do not use.
+`AUTH_TOKEN` cookie on `.spothero.com`, an RS256 JWT from Auth0 (accounts.spothero.com) with a 30 day expiry. Proven 2026-11-07: that cookie alone returns 200 from `/reservations/` and `/users/me/`. `appSession.*`, `sh-sso` and `csrftoken` alone return 401. The same token as `Authorization: Bearer`, `Token` or `JWT` with no cookie returns 401. `/user/` returns 401 even with a good session.
 
-**Live path:** `GET https://api.spothero.com/v2/search/transient`
+Chrome stores cookie values in `encrypted_value` with `value` empty. Database version 24 and later prepends SHA-256 of the host to the plaintext.
 
-Query params: `lat`, `lon`, UTC `starts`/`ends`, `action=LIST_SEARCH`, tracking UUIDs, etc.
+## Checkout (from the bundle, never sent)
 
-Headers: `x-spothero-spa: consumer-web`, `SpotHero-Version: 2019-08-13`, Origin/Referer.
+`POST /api/v1/checkout/`, `SpotHero-Version: 2026-10-06`.
 
-**Geocode helper:** `GET spothero.com/api/v1/search-params/` (city slug for timezone).
+Body: `items[]{item_type:"rental", price, key, add_ons:[], item_context{facility, search_id, action_id, phone_number, quote_token, rental_source_title, starts, ends, is_event_rate, vehicle_profile_id | license_plate_str + license_plate_state | license_plate_unknown}}`, `payment{use_spothero_credit, cards[{card_external_id}]}`, `total_price`, `currency`, `email`. The site also sends an analytics `mixpanel_id`, which this CLI leaves out. Item level `rate_id`, `quote_token`, `quote_mac` are no longer sent.
 
-## Book preview (live verified Sep 2026)
+## Cancel
 
-**Live path:** `GET https://api.spothero.com/v2/search/transient/{facilityId}?starts=<UTC>&ends=<UTC>`
+`GET /reservations/{id}/refund-eligibility/` (proven live, `SpotHero-Version: 2025-04-28`) returns `original_source_refund.is_eligible`, `credit_only_refund.is_eligible`, `cancellation_reasons[]{id, reason, reason_displayed_to_customer}`.
 
-Response: `{ tracking, result }` with `rates[].quote`:
+`POST /reservations/{id}/refund/` (from the bundle, never sent) with `{reason, access_key, refund_as_credit}`. `reason` is the `reason` string, not the id.
 
-| Field | Checkout use |
-|-------|----------------|
-| `quote.order[0].rate_id` | Item `rate_id` (numeric string) |
-| `quote.meta.quote_token` | Item `quote_token` (JWT-like) |
-| `quote.meta.quote_mac` | Item `quote_mac` (often same as rate_id) |
-| `quote.order[0].starts/ends` | `item_context.starts/ends` (RFC3339 with offset) |
-| `quote.total_price.value` | Item `price` (cents) |
-| `facility.requirements.license_plate` | Requires vehicle or ad-hoc plate in `item_context` |
+## Inventory
 
-**Dead path:** `GET /api/v1/facilities/{id}/rates/` (404 HTML).
+`GET api.spothero.com/v2/search/transient` and `/search/transient/{id}` are public (proven live). Quote fields: `rates[].quote.meta.{quote_token, quote_valid_until}`, `quote.order[0].{starts, ends, rate_id}`, `quote.total_price.value` in cents. Requirements are under `facility.common.requirements`. `tracking.action_id` comes back empty; the site mints its own.
 
-## Checkout / book place (live consumer-checkout shape)
+## Live field types that bit us
 
-**Path:** `POST https://spothero.com/api/v1/checkout/`
+`vehicles[].license_plate` is an object `{id, value, state}`. `reservations[].cancellation_allowed` is a string such as `customer`. `reservations/` is slow: 25 rows take about 6s and 100 can outlast a 30s timeout.
 
-**Headers (mutating):** session cookies, `X-CSRFToken` (from `csrftoken` cookie), `SpotHero-Version: 2025-04-28`, `Origin`, `Referer: https://spothero.com/checkout`.
-
-**Body shape:**
-
-```json
-{
-  "currency": "usd",
-  "email": "user@example.com",
-  "total_price": 2968,
-  "payment": {
-    "use_spothero_credit": false,
-    "cards": [{ "card_external_id": "REDACTED-CARD-UUID" }]
-  },
-  "items": [{
-    "item_type": "rental",
-    "price": 2968,
-    "rate_id": "113821",
-    "quote_token": "…",
-    "quote_mac": "113821",
-    "item_context": {
-      "facility": 6698,
-      "starts": "2026-09-15T09:00:00-07:00",
-      "ends": "2026-09-15T17:00:00-07:00",
-      "phone_number": "+14155550100",
-      "quote_token": "…",
-      "rental_source_title": "web",
-      "search_id": "…",
-      "vehicle_profile_id": 37062538
-    }
-  }]
-}
-```
-
-Payment is nested under `payment` (not top-level `cards`). Saved cards use `card_external_id` UUID, not numeric `card_id`.
-
-**Account discovery (reservation-auth authoritative):**
-
-| Endpoint | Use |
-|----------|-----|
-| `GET /users/me/` | Email, `phone_number`, `credit_cards[]` with `card_external_id` + `card_id`, default card |
-| `GET /users/{id}/vehicles/` | Default saved vehicle → `vehicle_profile_id` |
-| `GET /user/` | Fallback email only; often 401 while reservations work |
-
-**License plate:** when required, saved vehicles use `item_context.vehicle_profile_id`; ad-hoc uses `license_plate_str` + optional `license_plate_state`.
-
-**Safety gates (unchanged):** `--enable-live-booking --owner-approved --confirm "PLACE SPOTHERO BOOKING"`
-
-## Cancel / refund (live verified Sep 2026)
-
-**Dead path:** `POST /api/v1/reservations/{id}/cancellation/` (404 live).
-
-**Live path:** `POST https://spothero.com/api/v1/reservations/{id}/refund/` with empty body → `{ totalRefunded, status: cancelled/refund }`.
-
-**Confirm tokens:** persisted to `{config}/confirm-tokens.json` (0600) with 15m TTL so `cancel preview` → separate-process `cancel --confirm` works.
-
-## Session API — `https://spothero.com/api/v1`
-
-| Endpoint | Notes |
-|----------|-------|
-| `/reservations/` | Cookie auth. `rental_id` int, `price` int cents, `is_cancellable`. |
-| `/checkout/` | Consumer checkout POST (shape above). |
-| `/users/me/` | Preferred profile for checkout assembly. |
-| `/user/` | Often 401 — not used alone for doctor auth. |
+Paging: `meta.{count, next, previous}` with `page` and `page_size`.
 
 ## Timezone
 
-Naive `--starts`/`--ends` → local time via `--city-slug` or search city slug. RFC3339 with `Z`/offset overrides. Craig queries use UTC; checkout `item_context` uses offset times from quote order or local formatting.
-
-## Safety gates
-
-- **Book:** `--enable-live-booking --owner-approved --confirm "PLACE SPOTHERO BOOKING"`
-- **Cancel:** `cancel preview` → `cancel --yes --confirm <token>` (token on disk, single-use)
+Naive `--starts`/`--ends` use local time via `--city-slug` or the search city. RFC3339 with `Z` or an offset overrides. Craig queries use UTC; checkout `item_context` uses offset times from the quote.
