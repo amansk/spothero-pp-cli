@@ -300,7 +300,7 @@ func newBookPlaceCmd(flags *rootFlags) *cobra.Command {
 			if !consumer.CheckoutSucceeded(out) {
 				return reportAmbiguousBooking(cmd, flags, c, req, &consumer.AmbiguousError{Operation: "booking", Detail: "the response named no purchase or order"})
 			}
-			return flags.printJSON(cmd, map[string]any{"placed": true, "booked": true, "total_price_cents": req.TotalPrice, "result": out})
+			return flags.printJSON(cmd, map[string]any{"placed": true, "booked": true, "total_price_cents": req.TotalPrice, "result": safeResult(out, "order_id", "checkout_id", "status", "total_price", "currency")})
 		},
 	}
 	cmd.Flags().IntVar(&in.facilityID, "facility-id", 0, "Facility id from find results")
@@ -471,7 +471,7 @@ func newCancelCmd(flags *rootFlags) *cobra.Command {
 			if gerr != nil || !strings.EqualFold(after.Status, "cancelled") {
 				return reportAmbiguousCancel(cmd, flags, c, id, &consumer.AmbiguousError{Operation: "cancellation", Detail: "the reservation does not yet show as cancelled"})
 			}
-			return flags.printJSON(cmd, map[string]any{"cancelled": true, "refund_as_credit": req.RefundAsCredit, "status_now": after.Status, "result": out})
+			return flags.printJSON(cmd, map[string]any{"cancelled": true, "refund_as_credit": req.RefundAsCredit, "status_now": after.Status, "result": safeResult(out, "status", "refund_amount", "amount", "message")})
 		},
 	}
 	cmd.Flags().StringVar(&confirm, "confirm", "", "Token from cancel preview")
@@ -696,3 +696,16 @@ func sortReservationsByStart(rs []consumer.Reservation) {
 // command, so this is a second lock: they can never reach a checkout or a refund, even
 // if a future happy-path fixture carried every gate.
 func harnessActive() bool { return cliutil.IsVerifyEnv() || cliutil.IsDogfoodEnv() }
+
+// safeResult keeps only the named fields of a checkout or refund response. The raw
+// bodies carry an order access key and a saved card token, which must not reach
+// stdout, logs or an agent's transcript.
+func safeResult(in map[string]any, keep ...string) map[string]any {
+	out := make(map[string]any, len(keep))
+	for _, k := range keep {
+		if v, ok := in[k]; ok {
+			out[k] = v
+		}
+	}
+	return out
+}

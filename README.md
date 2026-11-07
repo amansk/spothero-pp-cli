@@ -165,7 +165,7 @@ Booking and cancelling are real and hard gated. Everything else reads.
 
 ### What has been proven live
 
-Checked 2026-11-07 against a real account. No booking or cancellation was ever placed while testing.
+Checked 2026-11-07 against a real account, including one real booking that was then cancelled, with the owner approving the exact garage, window and price.
 
 | Step | Status |
 |---|---|
@@ -175,10 +175,10 @@ Checked 2026-11-07 against a real account. No booking or cancellation was ever p
 | `account cards`, `account vehicles`, `facilities` | Proven live |
 | `cancel preview` (issues only a local token) | Proven live |
 | Refund eligibility read behind `cancel preview` | Proven live |
-| `book place` checkout request | **Unverified.** Built from the site's checkout code as of 2026-11-07, with `SpotHero-Version: 2026-10-06`, and tested against a fake server. Never sent to SpotHero. |
-| `cancel` refund request | **Unverified.** Body `{reason, access_key, refund_as_credit}` built from the site's cancel dialog code, tested against a fake server. Never sent to SpotHero. |
+| `book place` checkout request | Proven live: placed, and the reservation read back as valid |
+| `cancel` refund request | Proven live: reservation read back as cancelled. The refund reaching the card was not observed by the CLI |
 
-To prove the last two, the owner can run this, which charges a real card for a cheap booking and then cancels it. Pick a garage and a window a few days out.
+To repeat that test, run this. It charges a real card for a cheap booking and then cancels it. Pick a garage and a window a few days out.
 
 ```bash
 spothero-pp-cli preflight --facility-id <ID> --starts <START> --ends <END> --max-total 15 --agent

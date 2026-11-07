@@ -240,7 +240,7 @@ Book or cancel only when the owner approved that exact action in this conversati
 - If output says `"placed": "unknown"` or `"cancelled": "unknown"`, do NOT retry. Check `reservations list` and tell the owner.
 - `--agent` does not bypass any gate. `book place`, `cancel` and `cancel preview` are not exposed over MCP.
 
-**Unverified.** The `book place` checkout request and the `cancel` refund request were built from the site's code on 2026-11-07 and tested only against a fake server; they have never been sent to SpotHero. Expect that the first real use could fail, and report the error rather than improvising. The README has the exact test for the owner. Login, search, quotes, reservations, saved cards and vehicles, and refund eligibility are proven live.
+**Proven once.** One real `book place` and one real `cancel` ran on 2026-11-07 with the owner approving the exact garage, window and price. Still treat each as a real charge or refund: confirm with the user first.
 
 ## Auth Setup
 
