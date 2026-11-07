@@ -319,7 +319,7 @@ type craigAddress struct {
 }
 
 type craigFacilityResponse struct {
-	Result json.RawMessage `json:"result"`
+	Result   json.RawMessage `json:"result"`
 	Tracking struct {
 		SearchID string `json:"search_id"`
 		ActionID string `json:"action_id"`

@@ -11,14 +11,14 @@ const CraigAPIBaseURL = "https://api.spothero.com/v2"
 const (
 	PathSearchParams = "/search-params/"
 	// PathFacilityRates is legacy ratesSearch on spothero.com (404/dead); book preview uses Craig instead.
-	PathFacilityRates = "/facilities/%d/rates/"
-	PathUser          = "/user/"
-	PathUsersMe       = "/users/me/"
+	PathFacilityRates   = "/facilities/%d/rates/"
+	PathUser            = "/user/"
+	PathUsersMe         = "/users/me/"
 	PathUserVehicles    = "/users/%d/vehicles/"
 	PathUserCreditCards = "/users/%d/credit-cards/"
-	PathReservations  = "/reservations/"
-	PathReservation   = "/reservations/%s/"
-	PathCheckout      = "/checkout/"
+	PathReservations    = "/reservations/"
+	PathReservation     = "/reservations/%s/"
+	PathCheckout        = "/checkout/"
 	// PathReservationRefund is live consumer cancel/refund (POST empty body).
 	PathReservationRefund = "/reservations/%s/refund/"
 )

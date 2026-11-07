@@ -38,13 +38,13 @@ type SearchParams struct {
 
 // SearchSpot is one Craig bulk transient search hit mapped for CLI output.
 type SearchSpot struct {
-	FacilityID     int    `json:"facility_id"`
-	Title          string `json:"title"`
-	Address        string `json:"address,omitempty"`
-	Slug           string `json:"slug,omitempty"`
-	DistanceMeters int    `json:"distance_meters"`
-	PriceCents     int    `json:"price_cents"`
-	Price          string `json:"price"`
+	FacilityID         int      `json:"facility_id"`
+	Title              string   `json:"title"`
+	Address            string   `json:"address,omitempty"`
+	Slug               string   `json:"slug,omitempty"`
+	DistanceMeters     int      `json:"distance_meters"`
+	PriceCents         int      `json:"price_cents"`
+	Price              string   `json:"price"`
 	Available          bool     `json:"available"`
 	Status             string   `json:"status,omitempty"`
 	UnavailableReasons []string `json:"unavailable_reasons,omitempty"`
@@ -121,13 +121,13 @@ type FacilityRateResult struct {
 
 // RateQuote is a facility rate for a time window with checkout quote binding fields.
 type RateQuote struct {
-	FacilityID           int    `json:"facility_id"`
-	Starts               string `json:"starts"`
-	Ends                 string `json:"ends"`
-	ContextStarts        string `json:"context_starts,omitempty"`
-	ContextEnds          string `json:"context_ends,omitempty"`
-	PriceCents           int    `json:"price_cents"`
-	Price                string `json:"price"`
+	FacilityID           int      `json:"facility_id"`
+	Starts               string   `json:"starts"`
+	Ends                 string   `json:"ends"`
+	ContextStarts        string   `json:"context_starts,omitempty"`
+	ContextEnds          string   `json:"context_ends,omitempty"`
+	PriceCents           int      `json:"price_cents"`
+	Price                string   `json:"price"`
 	Available            bool     `json:"available"`
 	UnavailableReasons   []string `json:"unavailable_reasons,omitempty"`
 	RateID               string   `json:"rate_id"`
@@ -151,12 +151,12 @@ type CheckoutPayment struct {
 }
 
 type CheckoutItem struct {
-	ItemType     string             `json:"item_type"`
-	Price        int                `json:"price"`
-	RateID       string             `json:"rate_id"`
-	QuoteToken   string             `json:"quote_token"`
-	QuoteMAC     string             `json:"quote_mac"`
-	ItemContext  CheckoutItemContext `json:"item_context"`
+	ItemType    string              `json:"item_type"`
+	Price       int                 `json:"price"`
+	RateID      string              `json:"rate_id"`
+	QuoteToken  string              `json:"quote_token"`
+	QuoteMAC    string              `json:"quote_mac"`
+	ItemContext CheckoutItemContext `json:"item_context"`
 }
 
 type CheckoutItemContext struct {
