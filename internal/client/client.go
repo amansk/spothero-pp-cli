@@ -2376,11 +2376,11 @@ func (c *Client) doInternal(ctx context.Context, method, path string, params map
 					return nil, resp.StatusCode, fmt.Errorf("%s %s: expected JSON, API returned HTML instead of JSON: %s", method, c.displayURL(path, authHeader), summary)
 				}
 			}
-			return json.RawMessage(sanitizeJSONResponse(respBody)), resp.StatusCode, nil
+			return json.RawMessage(stripAccessKey(sanitizeJSONResponse(respBody))), resp.StatusCode, nil
 		}
 
 		if !binaryResponse {
-			respBody = sanitizeJSONResponse(respBody)
+			respBody = stripAccessKey(sanitizeJSONResponse(respBody))
 		}
 
 		bodyText := truncateBody(respBody)

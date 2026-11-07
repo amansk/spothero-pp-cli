@@ -55,7 +55,7 @@ Do not use this CLI for:
 These capabilities aren't available in any other tool for this API.
 
 ### Decide faster
-- **`best`** — Get one ranked parking pick plus alternatives for a place and time window.
+- **`best`**: Get one ranked parking pick plus alternatives for a place and time window.
 
   _Reach for this when asked to pick a garage rather than list them._
 
@@ -64,21 +64,21 @@ These capabilities aren't available in any other tool for this API.
   ```
 
 ### Book with guardrails
-- **`preflight`** — Check session, vehicle, card, overlaps and spend cap before you try to book.
+- **`preflight`**: Check session, vehicle, card, overlaps and spend cap before you try to book.
 
   _Run this before asking an owner to approve a booking._
 
   ```bash
   spothero-pp-cli preflight --facility-id 2175 --starts 2027-01-15T09:00 --ends 2027-01-15T12:00 --max-total 40 --agent
   ```
-- **`rebook`** — Re-quote a past reservation's garage for a new window and compare with what you paid.
+- **`rebook`**: Re-quote a past reservation's garage for a new window and compare with what you paid.
 
   _Use when the owner wants the same garage again._
 
   ```bash
   spothero-pp-cli rebook --starts 2027-01-15T09:00 --ends 2027-01-15T12:00 --agent
   ```
-- **`commute`** — Quote a recurring series of parking windows with a total.
+- **`commute`**: Quote a recurring series of parking windows with a total.
 
   _Use to budget a recurring commute._
 
@@ -87,21 +87,21 @@ These capabilities aren't available in any other tool for this API.
   ```
 
 ### Your reservations
-- **`next`** — See your soonest upcoming reservation and when it starts.
+- **`next`**: See your soonest upcoming reservation and when it starts.
 
   _Use for what parking do I have next._
 
   ```bash
   spothero-pp-cli next --agent
   ```
-- **`refundable`** — See refund status across upcoming reservations at once.
+- **`refundable`**: See refund status across upcoming reservations at once.
 
   _Use before cancelling or when plans change._
 
   ```bash
   spothero-pp-cli refundable --days 30 --agent
   ```
-- **`regulars`** — See which garages you book most, with last booked and last price.
+- **`regulars`**: See which garages you book most, with last booked and last price.
 
   _Use to resolve my usual garage._
 

@@ -24,7 +24,7 @@ import (
 	"spothero-pp-cli/internal/store"
 )
 
-var version = "0.1.8"
+var version = "0.2.0"
 
 type rootFlags struct {
 	asJSON        bool
