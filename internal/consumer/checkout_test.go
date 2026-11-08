@@ -106,7 +106,7 @@ func TestBuildCheckoutLiveShape(t *testing.T) {
 		t.Fatalf("add_ons must be an empty array, got %v", item["add_ons"])
 	}
 	ctx := item["item_context"].(map[string]any)
-	if ctx["facility"].(float64) != 6698 || ctx["vehicle_profile_id"].(float64) != 37062538 {
+	if ctx["facility"].(float64) != 6698 || ctx["vehicle_profile_id"].(float64) != 20000001 {
 		t.Fatalf("context=%v", ctx)
 	}
 	if ctx["phone_number"] != "+14155550100" || ctx["rental_source_title"] != "web" {

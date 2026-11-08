@@ -40,7 +40,7 @@ func TestParseCreditCardsLiveShape(t *testing.T) {
 	if len(cards) != 1 {
 		t.Fatalf("expected 1 non-deleted card, got %+v", cards)
 	}
-	if cards[0].CardID != 46111484 || cards[0].CardLast4 != "4242" || !cards[0].IsDefault {
+	if cards[0].CardID != 10000001 || cards[0].CardLast4 != "4242" || !cards[0].IsDefault {
 		t.Fatalf("%+v", cards[0])
 	}
 	if cards[0].CardExternalID != "00000000-0000-4000-8000-000000000001" {
@@ -72,7 +72,7 @@ func TestEnrichCreditCardsFetchesWhenMeOmitsCards(t *testing.T) {
 	if enriched.DefaultCardExternalID != "00000000-0000-4000-8000-000000000001" {
 		t.Fatalf("external=%q", enriched.DefaultCardExternalID)
 	}
-	if enriched.DefaultCardID != 46111484 {
+	if enriched.DefaultCardID != 10000001 {
 		t.Fatalf("card_id=%d", enriched.DefaultCardID)
 	}
 }
@@ -83,7 +83,7 @@ func TestResolveCardExternalIDFromNumericID(t *testing.T) {
 		t.Fatal(err)
 	}
 	acct := UserAccount{CreditCards: cards}
-	ext, err := resolveCardExternalID(acct, "", 46111484)
+	ext, err := resolveCardExternalID(acct, "", 10000001)
 	if err != nil || ext != "00000000-0000-4000-8000-000000000001" {
 		t.Fatalf("ext=%q err=%v", ext, err)
 	}
@@ -95,7 +95,7 @@ func TestParseVehiclesDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	v, ok := pickDefaultVehicle(vehicles)
-	if !ok || v.ID != 37062538 || v.PlateLast2 != "23" {
+	if !ok || v.ID != 20000001 || v.PlateLast2 != "23" {
 		t.Fatalf("%+v ok=%v", v, ok)
 	}
 }
