@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "applied_at": "2026-11-10",
+  "base_run_id": "20261107-122157-08957e70",
+  "base_printing_press_version": "4.35.0",
+  "upstream_issue": null,
+  "id": "spothero-legacy-cookies",
+  "summary": "auth login --cookies-file accepts a v0.1.8 cookies.json map, and drops cookie values that are not a valid Cookie header.",
+  "reason": "0.1.8 saved {\"cookies\":{name:value}}. The storage-state parser rejected the map and passed the JSON to net/http, which failed with '=' not found. The session is still saved only after the API accepts it.",
+  "files": [
+    "internal/cli/auth.go",
+    "internal/cli/spothero_auth.go",
+    "internal/session/cookies.go",
+    "internal/session/auth.go"
+  ],
+  "call_sites": [
+    "cookieHeaderFromSessionFile",
+    "ParseSessionFile"
+  ],
+  "validated_outcome": "TestAuthLoginCookiesFileAcceptsV018Session; TestParseSessionFileV018Map; TestSafeHeaderDropsUnparseableCookie."
+}

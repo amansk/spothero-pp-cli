@@ -1095,38 +1095,32 @@ func loadCookiesFromFile(path string, domain string) (importedCookieFile, error)
 		if len(state.Cookies) == 0 {
 			return importedCookieFile{}, fmt.Errorf("cookies file contains an empty cookies array")
 		}
-		parts := make([]string, 0, len(state.Cookies))
-		cookies := make([]*http.Cookie, 0, len(state.Cookies))
+		// A value containing ';' makes the joined header fail net/http with
+		// "'=' not found". Keep the pairs that parse; the session cookie is enough.
+		jar := map[string]string{}
 		for _, c := range state.Cookies {
 			if !cookieDomainMatches(c.Domain, domain) {
 				continue
 			}
 			name := strings.TrimSpace(c.Name)
-			if name == "" {
+			if name == "" || c.Value == "" {
 				continue
 			}
-			path := c.Path
-			if path == "" {
-				path = "/"
-			}
-			ck := &http.Cookie{
-				Name:     name,
-				Value:    c.Value,
-				Domain:   c.Domain,
-				Path:     path,
-				Secure:   c.Secure,
-				HttpOnly: c.HTTPOnly,
-			}
-			if c.Expires > 0 {
-				ck.Expires = time.Unix(int64(c.Expires), 0)
-			}
-			cookies = append(cookies, ck)
-			parts = append(parts, name+"="+c.Value)
+			jar[name] = c.Value
 		}
-		if len(parts) == 0 {
+		header := safeCookieHeader(jar)
+		if header == "" {
 			return importedCookieFile{}, fmt.Errorf("cookies file contains no cookies for %s", domain)
 		}
-		return importedCookieFile{Header: strings.Join(parts, "; "), Cookies: cookies}, nil
+		return importedCookieFile{Header: header, Cookies: parseCookieHeaderCookies(header)}, nil
+	}
+	// pp:patch spothero-legacy-cookies: v0.1.8 wrote {"cookies":{name:value}}.
+	// Treating that JSON as a raw Cookie header is the "'=' not found" failure.
+	if header, ok, err := cookieHeaderFromSessionFile(data); ok {
+		if err != nil {
+			return importedCookieFile{}, err
+		}
+		return importedCookieFile{Header: header, Cookies: parseCookieHeaderCookies(header)}, nil
 	}
 	header := trimCookieHeaderPrefix(string(data))
 	if header == "" {

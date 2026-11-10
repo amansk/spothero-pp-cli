@@ -1,12 +1,15 @@
 package chromecookies
 
 import (
+	"bytes"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/sha256"
 	"database/sql"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -84,6 +87,68 @@ func TestReadWrongKeyYieldsNoCookies(t *testing.T) {
 				t.Fatalf("%s imported with an empty value", name)
 			}
 		}
+	}
+}
+
+// Linux with no keyring, including Chrome's --password-store=basic, encrypts
+// with the fixed peanuts password and one PBKDF2 iteration. Cookie database
+// version 24 prefixes the plaintext with the host hash.
+func TestLinuxBasicStoreDecryptsWithPeanuts(t *testing.T) {
+	key, err := Key("peanuts", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := Read(context.Background(), fixtureDB(t, key), "spothero.com", key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["AUTH_TOKEN"] != "fixture.jwt.value" || got["csrftoken"] != "fixture-csrf" {
+		t.Fatalf("peanuts key did not decrypt the basic store (names %d)", len(got))
+	}
+}
+
+func TestCandidateKeysUsesPeanutsWhenSecretToolFails(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("linux keyring fallback")
+	}
+	dir := t.TempDir()
+	script := filepath.Join(dir, "secret-tool")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	got, err := CandidateKeys(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := Key("peanuts", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || !bytes.Equal(got[0], want) {
+		t.Fatalf("expected only the basic-store key, got %d keys", len(got))
+	}
+}
+
+func TestCandidateKeysTriesKeyringThenPeanuts(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("linux keyring fallback")
+	}
+	dir := t.TempDir()
+	script := filepath.Join(dir, "secret-tool")
+	body := "#!/bin/sh\nprintf '%s\\n' 'keyring-secret'\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	got, err := CandidateKeys(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyring, _ := Key("keyring-secret", 1)
+	peanuts, _ := Key("peanuts", 1)
+	if len(got) != 2 || !bytes.Equal(got[0], keyring) || !bytes.Equal(got[1], peanuts) {
+		t.Fatalf("expected keyring key then peanuts, got %d keys", len(got))
 	}
 }
 

@@ -7,7 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
+	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -125,71 +128,316 @@ func verifySessionForLogin(ctx context.Context, flags *rootFlags, header string)
 // prompting means multi-profile users get the right account with no question, and
 // agents with no input still work.
 func nativeChromeSession(ctx context.Context, w io.Writer, flags *rootFlags, domain, profileFlag string) (string, error) {
-	var candidates []chromeProfile
-	if profileFlag != "" {
-		p, err := resolveProfileByName(profileFlag)
-		if err != nil {
-			return "", err
-		}
-		candidates = []chromeProfile{p}
-	} else {
-		profiles, err := discoverChromeProfilesNative(ctx, domain)
-		if err != nil {
-			return "", err
-		}
-		candidates = profiles
+	profiles, err := discoverChromeProfilesNative(ctx, domain)
+	if err != nil {
+		return "", err
 	}
-	if len(candidates) == 0 {
+	if profileFlag != "" {
+		profiles = filterChromeProfilesByName(profiles, profileFlag)
+		if len(profiles) == 0 {
+			return "", fmt.Errorf("Chrome profile %q not found", profileFlag)
+		}
+	}
+	if len(profiles) == 0 {
 		return "", fmt.Errorf("no Chrome profile found")
 	}
-	key, err := chromecookies.SafeStorageKey(ctx)
+	keys, err := chromecookies.CandidateKeys(ctx)
 	if err != nil {
 		return "", err
 	}
 	var lastErr error = chromecookies.ErrNoCookies
-	for _, p := range candidates {
-		db, ok := chromecookies.LocateDB(filepath.Join(p.DataDir, p.Dir))
+	for _, p := range profiles {
+		db, ok := chromecookies.LocateDB(profileCookieDir(p))
 		if !ok {
 			continue
 		}
-		cookies, err := chromecookies.Read(ctx, db, domain, key)
-		if err != nil {
-			lastErr = err
-			continue
+		for _, key := range keys {
+			read, readErr := chromecookies.Read(ctx, db, domain, key)
+			if readErr != nil {
+				lastErr = readErr
+				continue
+			}
+			if read[sessionCookie] == "" {
+				lastErr = fmt.Errorf("profile %s has no %s cookie; sign in at https://spothero.com", p.profileLocation(), sessionCookie)
+				continue
+			}
+			parts := []string{sessionCookie + "=" + read[sessionCookie]}
+			if v := read["csrftoken"]; v != "" {
+				parts = append(parts, "csrftoken="+v)
+			}
+			header := strings.Join(parts, "; ")
+			// A keyring password that does not decrypt this profile must not
+			// hide the basic-store key. The API is what decides the key worked.
+			if err := verifyCookieHeader(ctx, flags, header); err != nil {
+				lastErr = fmt.Errorf("profile %s: %v", p.profileLocation(), err)
+				continue
+			}
+			fmt.Fprintf(w, "Read the session from Chrome profile %q.\n", p.profileLocation())
+			return header, nil
 		}
-		if cookies[sessionCookie] == "" {
-			lastErr = fmt.Errorf("profile %s has no %s cookie; sign in at https://spothero.com", p.profileLocation(), sessionCookie)
-			continue
-		}
-		parts := []string{sessionCookie + "=" + cookies[sessionCookie]}
-		if v := cookies["csrftoken"]; v != "" {
-			parts = append(parts, "csrftoken="+v)
-		}
-		header := strings.Join(parts, "; ")
-		if err := verifyCookieHeader(ctx, flags, header); err != nil {
-			lastErr = fmt.Errorf("profile %s: %v", p.profileLocation(), err)
-			continue
-		}
-		fmt.Fprintf(w, "Read the session from Chrome profile %q.\n", p.profileLocation())
-		return header, nil
 	}
 	return "", lastErr
 }
 
+func profileCookieDir(p chromeProfile) string {
+	if p.Dir == "" || p.Dir == "." {
+		return p.DataDir
+	}
+	return filepath.Join(p.DataDir, p.Dir)
+}
+
+func filterChromeProfilesByName(profiles []chromeProfile, name string) []chromeProfile {
+	want := strings.ToLower(name)
+	var matched []chromeProfile
+	for _, p := range profiles {
+		if strings.ToLower(p.DisplayName) == want || strings.ToLower(p.Dir) == want || strings.ToLower(p.profileLocation()) == want {
+			matched = append(matched, p)
+		}
+	}
+	return matched
+}
+
 // discoverChromeProfilesNative lists profiles without the sqlite3 binary the
-// generated discovery needs, with the conventional Default profile first.
+// generated discovery needs. Linux Chrome often keeps the database at
+// Default/Cookies or Default/Network/Cookies, including when Default is a
+// symlink or the user-data dir is google-chrome-headless. Directory listing
+// alone misses those, which is how login reported "no Chrome profile found"
+// and fell through to pycookiecheat.
 func discoverChromeProfilesNative(_ context.Context, _ string) ([]chromeProfile, error) {
-	dirs, err := chromeChannelDirs()
+	dirs, err := nativeChromeDataDirs()
 	if err != nil {
 		return nil, err
 	}
-	var out []chromeProfile
+	type ranked struct {
+		profile chromeProfile
+		hasDB   bool
+	}
+	var found []ranked
+	seen := map[string]bool{}
 	for _, ch := range dirs {
-		for _, name := range chromeProfileDirNames(ch.DataDir) {
-			out = append(out, chromeProfile{Channel: ch.Channel, DataDir: ch.DataDir, Dir: name})
+		for _, name := range nativeProfileDirNames(ch.DataDir) {
+			key := ch.DataDir + "\x00" + name
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			dir := ch.DataDir
+			if name != "." {
+				dir = filepath.Join(ch.DataDir, name)
+			}
+			display := readProfileDisplayName(filepath.Join(dir, "Preferences"))
+			if display == "" {
+				display = name
+			}
+			_, hasDB := chromecookies.LocateDB(dir)
+			found = append(found, ranked{
+				profile: chromeProfile{Channel: ch.Channel, DataDir: ch.DataDir, Dir: name, DisplayName: display},
+				hasDB:   hasDB,
+			})
+		}
+	}
+	sort.SliceStable(found, func(i, j int) bool {
+		if found[i].hasDB != found[j].hasDB {
+			return found[i].hasDB
+		}
+		if ri, rj := channelRank(found[i].profile.Channel), channelRank(found[j].profile.Channel); ri != rj {
+			return ri < rj
+		}
+		return profileDirRank(found[i].profile.Dir) < profileDirRank(found[j].profile.Dir)
+	})
+	out := make([]chromeProfile, 0, len(found))
+	for _, item := range found {
+		if item.hasDB {
+			out = append(out, item.profile)
+		}
+	}
+	// A channel with no cookie database still counts as "a profile" only when
+	// nothing anywhere has a database, so the caller can say so. Preferring
+	// empty stubs ahead of a later channel that has cookies was the regression.
+	if len(out) == 0 {
+		for _, item := range found {
+			out = append(out, item.profile)
 		}
 	}
 	return out, nil
+}
+
+func profileDirRank(dir string) int {
+	switch {
+	case dir == "Default":
+		return 0
+	case strings.HasPrefix(dir, "Profile "):
+		return 1
+	case dir == ".":
+		return 3
+	default:
+		return 2
+	}
+}
+
+// nativeChromeDataDirs is the generated channel list plus the Linux layouts
+// Chrome actually uses when there is no desktop session.
+func nativeChromeDataDirs() ([]chromeChannelDir, error) {
+	if runtime.GOOS != "linux" {
+		return chromeChannelDirs()
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	bases := []string{filepath.Join(home, ".config")}
+	if xdg := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); xdg != "" {
+		bases = append([]string{xdg}, bases...)
+	}
+	type candidate struct {
+		channel string
+		dir     string
+	}
+	var candidates []candidate
+	for _, base := range bases {
+		candidates = append(candidates,
+			candidate{chromeChannelStable, filepath.Join(base, "google-chrome")},
+			candidate{"Chrome Headless", filepath.Join(base, "google-chrome-headless")},
+			candidate{chromeChannelBeta, filepath.Join(base, "google-chrome-beta")},
+			candidate{chromeChannelDev, filepath.Join(base, "google-chrome-unstable")},
+			candidate{"Chromium", filepath.Join(base, "chromium")},
+			candidate{"Chromium Headless", filepath.Join(base, "chromium-headless")},
+		)
+	}
+	candidates = append(candidates,
+		candidate{"Chromium", filepath.Join(home, "snap", "chromium", "common", "chromium")},
+		candidate{chromeChannelStable, filepath.Join(home, ".var", "app", "com.google.Chrome", "config", "google-chrome")},
+	)
+	seen := map[string]bool{}
+	var existing []chromeChannelDir
+	for _, c := range candidates {
+		dir := filepath.Clean(c.dir)
+		if seen[dir] {
+			continue
+		}
+		info, statErr := os.Stat(dir)
+		if statErr != nil || !info.IsDir() {
+			continue
+		}
+		seen[dir] = true
+		existing = append(existing, chromeChannelDir{Channel: c.channel, DataDir: dir})
+	}
+	if len(existing) == 0 {
+		return nil, fmt.Errorf("no Chrome user data directory found")
+	}
+	return existing, nil
+}
+
+// nativeProfileDirNames returns profile directory names under a Chrome user-data
+// directory. It stats Default directly so a symlink or an unreadable listing
+// still resolves the path v0.1.8 read, and it trusts Local State for names that
+// are not "Default" or "Profile N".
+func nativeProfileDirNames(dataDir string) []string {
+	seen := map[string]bool{}
+	var names []string
+	add := func(name string) {
+		if !validProfileDirName(name) || seen[name] {
+			return
+		}
+		dir := dataDir
+		if name != "." {
+			dir = filepath.Join(dataDir, name)
+		}
+		info, err := os.Stat(dir) // follows a symlink Default, which ReadDir.IsDir does not
+		if err != nil || !info.IsDir() {
+			return
+		}
+		known := name == "." || name == "Default" || strings.HasPrefix(name, "Profile ")
+		if !known {
+			if _, ok := chromecookies.LocateDB(dir); !ok {
+				return
+			}
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	add("Default")
+	for _, name := range profileNamesFromLocalState(filepath.Join(dataDir, "Local State")) {
+		add(name)
+	}
+	entries, err := os.ReadDir(dataDir)
+	if err == nil {
+		for _, entry := range entries {
+			name := entry.Name()
+			if name == "Default" || strings.HasPrefix(name, "Profile ") {
+				add(name)
+				continue
+			}
+			full := filepath.Join(dataDir, name)
+			info, statErr := os.Stat(full)
+			if statErr != nil || !info.IsDir() {
+				continue
+			}
+			if _, ok := chromecookies.LocateDB(full); ok {
+				add(name)
+			}
+		}
+	}
+	if _, ok := chromecookies.LocateDB(dataDir); ok {
+		add(".")
+	}
+	return names
+}
+
+func validProfileDirName(name string) bool {
+	if name == "." {
+		return true
+	}
+	if name == "" || name == ".." || strings.ContainsAny(name, `/\`) {
+		return false
+	}
+	return true
+}
+
+func profileNamesFromLocalState(path string) []string {
+	data, err := os.ReadFile(path) // #nosec G304 -- Chrome's own Local State next to the profile being read
+	if err != nil {
+		return nil
+	}
+	var state struct {
+		Profile struct {
+			InfoCache map[string]json.RawMessage `json:"info_cache"`
+			LastUsed  string                     `json:"last_used"`
+		} `json:"profile"`
+	}
+	if json.Unmarshal(data, &state) != nil {
+		return nil
+	}
+	names := make([]string, 0, len(state.Profile.InfoCache)+1)
+	if state.Profile.LastUsed != "" {
+		names = append(names, state.Profile.LastUsed)
+	}
+	for name := range state.Profile.InfoCache {
+		names = append(names, name)
+	}
+	return names
+}
+
+func safeCookieHeader(cookies map[string]string) string {
+	return session.SafeHeader(cookies)
+}
+
+// cookieHeaderFromSessionFile accepts the v0.1.8 cookies.json map and a
+// storage-state document. The generated importer only understood a cookies
+// array; a map fell through to net/http and failed with "'=' not found".
+func cookieHeaderFromSessionFile(data []byte) (string, bool, error) {
+	if !strings.HasPrefix(strings.TrimSpace(string(data)), "{") {
+		return "", false, nil
+	}
+	stored, err := session.ParseSessionFile(data)
+	if err != nil || stored == nil || len(stored.Cookies) == 0 {
+		return "", false, nil
+	}
+	header := session.SafeHeader(stored.Cookies)
+	if header == "" {
+		return "", true, fmt.Errorf("cookies file has no usable spothero.com cookies")
+	}
+	return header, true, nil
 }
 
 // jwtExpiry reads exp from the session JWT for display. It is not a security check,

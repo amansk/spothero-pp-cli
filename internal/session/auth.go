@@ -3,7 +3,6 @@ package session
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,11 +51,7 @@ func LoadSession(home string) (*Session, error) {
 		}
 		return nil, err
 	}
-	var s Session
-	if err := json.Unmarshal(b, &s); err != nil {
-		return nil, fmt.Errorf("parse cookies file: %w", err)
-	}
-	return &s, nil
+	return ParseSessionFile(b)
 }
 
 // SaveSession writes cookies with mode 0600.
