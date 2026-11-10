@@ -5,13 +5,17 @@
   "base_printing_press_version": "4.35.0",
   "upstream_issue": null,
   "id": "spothero-native-chrome",
-  "summary": "auth login --chrome decrypts Chrome's cookie database natively, with the external tool chain kept as a fallback.",
-  "reason": "Chrome keeps values in encrypted_value. The owner has no pycookiecheat, and asking for manual token copying or a Python package defeats the login.",
+  "summary": "auth login --chrome decrypts Chrome's cookie database natively, including Linux profiles with no keyring and no sqlite3 CLI, with the external tool chain kept as a fallback.",
+  "reason": "Chrome keeps values in encrypted_value. On Linux the basic password store is used when libsecret is absent. Listing only Default/Profile directories missed symlink profiles and google-chrome-headless, so login fell through to pycookiecheat.",
   "files": [
-    "internal/cli/auth.go"
+    "internal/cli/auth.go",
+    "internal/cli/spothero_auth.go",
+    "internal/chromecookies/chromecookies.go"
   ],
   "call_sites": [
-    "nativeChromeSession"
+    "nativeChromeSession",
+    "nativeProfileDirNames",
+    "linuxCandidateKeys"
   ],
-  "validated_outcome": "TestReadDecryptsEncryptedValueColumn; live login read the session from Chrome Default on 2026-11-07."
+  "validated_outcome": "TestAuthLoginChromeLinuxWithoutKeyringOrSQLite; TestLinuxBasicStoreDecryptsWithPeanuts; TestCandidateKeysUsesPeanutsWhenSecretToolFails."
 }

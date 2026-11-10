@@ -7,6 +7,7 @@
 package chromecookies
 
 import (
+	"bytes"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
@@ -38,6 +39,19 @@ func Key(password string, iterations int) ([]byte, error) {
 // read may show a Keychain prompt, which is the operating system asking the owner,
 // so it runs on a timeout rather than hanging forever if nobody answers.
 func SafeStorageKey(ctx context.Context) ([]byte, error) {
+	keys, err := CandidateKeys(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return keys[0], nil
+}
+
+// CandidateKeys returns cookie keys to try, most specific first. On Linux a
+// desktop keyring password is optional: Chrome's basic store, and any install
+// with no keyring, encrypts with the fixed "peanuts" password. A keyring miss
+// must not hide that key, and a keyring hit that does not decrypt the database
+// is not the only attempt.
+func CandidateKeys(ctx context.Context) ([][]byte, error) {
 	switch runtime.GOOS {
 	case "darwin":
 		ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
@@ -46,18 +60,44 @@ func SafeStorageKey(ctx context.Context) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("read Chrome Safe Storage from the Keychain (allow the prompt, or use --cookies-file): %w", err)
 		}
-		return Key(strings.TrimSpace(string(out)), 1003)
-	case "linux":
-		// Without a desktop keyring Chrome uses the fixed "peanuts" password.
-		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-		if out, err := exec.CommandContext(ctx, "secret-tool", "lookup", "application", "chrome").Output(); err == nil && len(strings.TrimSpace(string(out))) > 0 {
-			return Key(strings.TrimSpace(string(out)), 1)
+		key, err := Key(strings.TrimSpace(string(out)), 1003)
+		if err != nil {
+			return nil, err
 		}
-		return Key("peanuts", 1)
+		return [][]byte{key}, nil
+	case "linux":
+		return linuxCandidateKeys(ctx)
 	default:
 		return nil, fmt.Errorf("native Chrome cookie import is not supported on %s; use --cookies-file", runtime.GOOS)
 	}
+}
+
+func linuxCandidateKeys(ctx context.Context) ([][]byte, error) {
+	peanuts, err := Key("peanuts", 1)
+	if err != nil {
+		return nil, err
+	}
+	keys := [][]byte{peanuts}
+	// secret-tool talks to D-Bus. A headless box with no keyring often has no
+	// daemon, and a hung lookup must not block login before the basic-store key.
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if _, lookErr := exec.LookPath("secret-tool"); lookErr != nil {
+		return keys, nil
+	}
+	out, err := exec.CommandContext(ctx, "secret-tool", "lookup", "application", "chrome").Output()
+	if err != nil {
+		return keys, nil
+	}
+	password := strings.TrimSpace(string(out))
+	if password == "" || password == "peanuts" {
+		return keys, nil
+	}
+	keyringKey, err := Key(password, 1)
+	if err != nil || bytes.Equal(keyringKey, peanuts) {
+		return keys, nil
+	}
+	return [][]byte{keyringKey, peanuts}, nil
 }
 
 // Decrypt reverses Chrome's v10/v11 AES-CBC. stripHostHash handles cookie database
@@ -112,6 +152,7 @@ func Read(ctx context.Context, cookiesDB, domain string, key []byte) (map[string
 	}
 	_ = copyFile(cookiesDB+"-wal", dst+"-wal")
 	_ = copyFile(cookiesDB+"-shm", dst+"-shm")
+	_ = copyFile(cookiesDB+"-journal", dst+"-journal")
 	db, err := sql.Open("sqlite", "file:"+dst)
 	if err != nil {
 		return nil, err
